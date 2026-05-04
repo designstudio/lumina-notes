@@ -1,4 +1,5 @@
 export type FolderKey =
+  | "get-started"
   | "all"
   | "work"
   | "personal"
