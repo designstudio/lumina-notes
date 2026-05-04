@@ -1,0 +1,63 @@
+{
+  "name": "lumina-notes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A polished desktop notes app inspired by Apple Notes and Soba.",
+  "main": "dist-electron/main.js",
+  "author": "Codex",
+  "license": "MIT",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build && tsc -p tsconfig.electron.json && electron-builder",
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.lumina.notes",
+    "productName": "Lumina Notes",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "appx",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "appx": {
+      "applicationId": "LuminaNotes",
+      "backgroundColor": "#f4efe7",
+      "displayName": "Lumina Notes",
+      "identityName": "LuminaNotes",
+      "publisherDisplayName": "Lumina Notes"
+    }
+  },
+  "dependencies": {
+    "@untitledui/icons": "^0.0.22",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.18",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "electron": "^36.2.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19",
+    "wait-on": "^8.0.3"
+  }
+}
