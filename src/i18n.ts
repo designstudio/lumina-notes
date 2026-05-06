@@ -33,6 +33,10 @@ export type TranslationDictionary = {
   appearanceSystem: string;
   settingsThemeTitle: string;
   settingsThemeDescription: string;
+  settingsNoteLayoutTitle: string;
+  settingsNoteLayoutDescription: string;
+  layoutSizeMedium: string;
+  layoutSizeFull: string;
   settingsToolbarTitle: string;
   settingsToolbarDescription: string;
   settingsToolbarAllGroups: string;
@@ -183,6 +187,10 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     appearanceSystem: "System",
     settingsThemeTitle: "Theme",
     settingsThemeDescription: "Pick a color mood for the interface.",
+    settingsNoteLayoutTitle: "Note layout",
+    settingsNoteLayoutDescription: "Choose how wide notes feel while you write.",
+    layoutSizeMedium: "Médio",
+    layoutSizeFull: "Completo",
     settingsToolbarTitle: "Editor toolbar",
     settingsToolbarDescription: "Choose which groups appear in the editor toolbar.",
     settingsToolbarAllGroups: "All groups",
@@ -206,17 +214,17 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     notesLocationRestart: "Restart app to load notes path",
     openFolder: "Open folder",
     browse: "Browse",
-    breadcrumbAria: "NavegaÃ§Ã£o",
+    breadcrumbAria: "NavegaÃƒÂ§ÃƒÂ£o",
     markdownTools: "Markdown tools",
     editorBodyAria: "Note body",
     toolbarUndo: "Undo",
     toolbarRedo: "Redo",
-    toolbarHeading: "TÃ­tulo",
-    toolbarHeading1: "TÃ­tulo 1",
-    toolbarHeading2: "TÃ­tulo 2",
-    toolbarHeading3: "TÃ­tulo 3",
-    toolbarHeading4: "TÃ­tulo 4",
-    toolbarQuote: "CitaÃ§Ã£o",
+    toolbarHeading: "TÃƒÂ­tulo",
+    toolbarHeading1: "TÃƒÂ­tulo 1",
+    toolbarHeading2: "TÃƒÂ­tulo 2",
+    toolbarHeading3: "TÃƒÂ­tulo 3",
+    toolbarHeading4: "TÃƒÂ­tulo 4",
+    toolbarQuote: "CitaÃƒÂ§ÃƒÂ£o",
     toolbarList: "List",
     toolbarBulletList: "Bullet List",
     toolbarOrderedList: "Ordered List",
@@ -235,9 +243,9 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     toolbarAlignCenter: "Align center",
     toolbarAlignRight: "Align right",
     toolbarBold: "Bold",
-    toolbarItalic: "ItÃ¡lico",
+    toolbarItalic: "ItÃƒÂ¡lico",
     toolbarStrikethrough: "Strikethrough",
-    toolbarCode: "CÃ³digo",
+    toolbarCode: "CÃƒÂ³digo",
     toolbarUnderline: "Underline",
     toolbarHighlight: "Highlight",
     toolbarClearHighlight: "Clear highlight",
@@ -288,8 +296,8 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     cancel: "Cancel",
     create: "Create",
     promptRenameFolder: "Rename folder",
-    alertFolderCannotDelete: "This folder cannot be deleted.",
-    confirmDeleteFolder: (label, destinationLabel) => `Delete "${label}"? Notes in this folder will move to ${destinationLabel}.`,
+    alertFolderCannotDelete: "Esta pasta n\u00e3o pode ser exclu\u00edda.",
+    confirmDeleteFolder: (label, destinationLabel) => `Excluir "${label}"? As notas dessa pasta ser\u00e3o movidas para ${destinationLabel}.`,
     confirmDeleteNote: (title) => `Delete "${title}"?`,
     getStartedTitle: "Getting started",
     getStartedPreview: "Welcome to Lophos Notes, a calm local-first editor built for focused writing.",
@@ -356,6 +364,10 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     appearanceSystem: "Sistema",
     settingsThemeTitle: "Temas",
     settingsThemeDescription: "Escolha uma paleta de cor para a interface.",
+    settingsNoteLayoutTitle: "Layout das notas",
+    settingsNoteLayoutDescription: "Escolha quão larga a nota fica durante a escrita.",
+    layoutSizeMedium: "Médio",
+    layoutSizeFull: "Completo",
     settingsToolbarTitle: "Barra do editor",
     settingsToolbarDescription: "Escolha quais grupos aparecem na barra do editor.",
     settingsToolbarAllGroups: "Todos os grupos",
@@ -398,7 +410,7 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     toolbarInsertTable: "Inserir tabela",
     toolbarAddRow: "Adicionar linha",
     toolbarAddColumn: "Adicionar coluna",
-    toolbarToggleHeaderRow: "Alternar linha de cabeÃ§alho",
+    toolbarToggleHeaderRow: "Alternar linha de cabeÃƒÂ§alho",
     toolbarDeleteRow: "Excluir linha",
     toolbarDeleteColumn: "Excluir coluna",
     toolbarDeleteTable: "Excluir tabela",
@@ -461,21 +473,21 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     cancel: "Cancelar",
     create: "Criar",
     promptRenameFolder: "Renomear pasta",
-    alertFolderCannotDelete: "Esta pasta nÃ£o pode ser excluÃ­da.",
-    confirmDeleteFolder: (label, destinationLabel) => `Excluir "${label}"? As notas dessa pasta serÃ£o movidas para ${destinationLabel}.`,
+    alertFolderCannotDelete: "Esta pasta n\u00e3o pode ser exclu\u00edda.",
+    confirmDeleteFolder: (label, destinationLabel) => `Excluir "${label}"? As notas dessa pasta ser\u00e3o movidas para ${destinationLabel}.`,
     confirmDeleteNote: (title) => `Excluir "${title}"?`,
     getStartedTitle: "Boas-vindas",
     getStartedPreview: "Boas-vindas ao Lophos Notes, um editor local-first tranquilo para escrita focada.",
     getStartedBody: `<h1>Boas-vindas ao Lophos Notes</h1>
-<p>O Lophos Ã© um app de notas local-first e tranquilo para escrever, organizar e lapidar suas ideias sem quebrar o seu fluxo.</p>
-<p>Use a barra de ferramentas do editor para <strong>negrito</strong>, <em>itÃ¡lico</em>, <s>tachado</s>, <code>cÃ³digo inline</code>, links, destaques, tÃ­tulos, listas, imagens e listas de tarefas.</p>
-<blockquote><p>Uma boa nota deve ser leve para comeÃ§ar e firme o bastante para crescer.</p></blockquote>
+<p>O Lophos ÃƒÂ© um app de notas local-first e tranquilo para escrever, organizar e lapidar suas ideias sem quebrar o seu fluxo.</p>
+<p>Use a barra de ferramentas do editor para <strong>negrito</strong>, <em>itÃƒÂ¡lico</em>, <s>tachado</s>, <code>cÃƒÂ³digo inline</code>, links, destaques, tÃƒÂ­tulos, listas, imagens e listas de tarefas.</p>
+<blockquote><p>Uma boa nota deve ser leve para comeÃƒÂ§ar e firme o bastante para crescer.</p></blockquote>
 <h2>Experimente o editor</h2>
-<p>Selecione qualquer texto e use a barra de ferramentas acima, ou teste atalhos conhecidos como <strong>Ctrl+B</strong> para negrito e <strong>Ctrl+I</strong> para itÃ¡lico.</p>
+<p>Selecione qualquer texto e use a barra de ferramentas acima, ou teste atalhos conhecidos como <strong>Ctrl+B</strong> para negrito e <strong>Ctrl+I</strong> para itÃƒÂ¡lico.</p>
 <ul>
-  <li><p><strong>TÃ­tulos</strong> deixam notas longas mais fÃ¡ceis de escanear.</p></li>
-  <li><p><strong>Destaques</strong> ajudam detalhes importantes a se sobressaÃ­rem.</p></li>
-  <li><p><strong>Links</strong> mantÃªm referÃªncias perto da ideia que elas apoiam.</p></li>
+  <li><p><strong>TÃƒÂ­tulos</strong> deixam notas longas mais fÃƒÂ¡ceis de escanear.</p></li>
+  <li><p><strong>Destaques</strong> ajudam detalhes importantes a se sobressaÃƒÂ­rem.</p></li>
+  <li><p><strong>Links</strong> mantÃƒÂªm referÃƒÂªncias perto da ideia que elas apoiam.</p></li>
 </ul>
 <h3>Uma checklist pequena</h3>
 <ul data-type="taskList">
@@ -484,14 +496,14 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
   <li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Mova a nota para a pasta certa</p></div></li>
 </ul>
 <h3>Uma tabela simples</h3>
-<table><tbody><tr><th>SeÃ§Ã£o</th><th>Como ajuda</th></tr><tr><td>Ideias</td><td>Guarda fragmentos antes que eles sumam.</td></tr><tr><td>Projetos</td><td>Organiza o prÃ³ximo passo e links importantes.</td></tr><tr><td>RevisÃ£o</td><td>Transforma notas brutas em algo mais claro.</td></tr></tbody></table>
+<table><tbody><tr><th>SeÃƒÂ§ÃƒÂ£o</th><th>Como ajuda</th></tr><tr><td>Ideias</td><td>Guarda fragmentos antes que eles sumam.</td></tr><tr><td>Projetos</td><td>Organiza o prÃƒÂ³ximo passo e links importantes.</td></tr><tr><td>RevisÃƒÂ£o</td><td>Transforma notas brutas em algo mais claro.</td></tr></tbody></table>
 <h3>Um exemplo de imagem</h3>
-<p>Adicione referÃªncias, moodboards, capturas e visuais direto dentro da nota.</p>
+<p>Adicione referÃƒÂªncias, moodboards, capturas e visuais direto dentro da nota.</p>
 <p><img src="${getStartedPlaceholderImage}" alt="Exemplo de imagem no Lophos Notes" /></p>
 <h2>Deixe com a sua cara</h2>
-<p>Escreva atas, pÃ¡ginas matinais, rascunhos, pesquisas, planos e pequenos fragmentos antes que eles virem ideias maiores.</p>
-<p>VocÃª tambÃ©m pode usar formataÃ§Ã£o precisa como x<sup>2</sup> e H<sub>2</sub>O quando uma nota precisar disso.</p>
-<p><mark data-color="#fff2a8" style="background-color: #fff2a8; color: inherit;">Dica:</mark> comece bagunÃ§ado e organize a nota depois. O editor estÃ¡ aqui quando vocÃª precisar de estrutura.</p>`,
+<p>Escreva atas, pÃƒÂ¡ginas matinais, rascunhos, pesquisas, planos e pequenos fragmentos antes que eles virem ideias maiores.</p>
+<p>VocÃƒÂª tambÃƒÂ©m pode usar formataÃƒÂ§ÃƒÂ£o precisa como x<sup>2</sup> e H<sub>2</sub>O quando uma nota precisar disso.</p>
+<p><mark data-color="#fff2a8" style="background-color: #fff2a8; color: inherit;">Dica:</mark> comece bagunÃƒÂ§ado e organize a nota depois. O editor estÃƒÂ¡ aqui quando vocÃƒÂª precisar de estrutura.</p>`,
     highlightYellow: "Amarelo",
     highlightGreen: "Verde",
     highlightBlue: "Azul",
@@ -517,6 +529,11 @@ export function getLanguageOptions(locale: EffectiveLanguage) {
     { value: "en-US" as const, label: t.languageOptionEnglish }
   ];
 }
+
+
+
+
+
 
 
 

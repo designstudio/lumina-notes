@@ -1,4 +1,4 @@
-import { type LanguagePreference } from "./i18n";
+﻿import { type LanguagePreference } from "./i18n";
 import { type FolderKey, type Note } from "./types";
 
 export type CustomFolder = {
@@ -17,12 +17,23 @@ export type ToolbarMenu = "heading" | "list" | "table" | "highlight" | "link" | 
 export type UiState = {
   sidebarCollapsed: boolean;
   expandedSections: Record<string, boolean>;
+  activeFolder: FolderKey;
+  selectedNoteId: string;
 };
 
 export type WorkspaceView = "notes" | "settings";
-export type ModalKey = "search" | "clear-data" | "create-folder";
+export type ModalKey = "search" | "clear-data" | "create-folder" | "delete-folder" | "delete-note";
 
-export type AppTheme = "blue-lagoon" | "green-forest" | "rose-pine" | "orange-soda" | "catpuccin" | "purple-haze";
+export type AppTheme =
+  | "cloudy-day"
+  | "blue-lagoon"
+  | "green-forest"
+  | "orange-soda"
+  | "catpuccin"
+  | "purple-haze"
+  | "fuchsia"
+  | "can-can";
+export type NoteLayoutSize = "medium" | "full";
 export type ToolbarVisibilityKey = "history" | "headings" | "quote" | "lists" | "tables" | "bold" | "italic" | "strikethrough" | "code" | "underline" | "highlight" | "links" | "superscript" | "subscript" | "separator" | "textAlign" | "image";
 export type ToolbarVisibilityPreferences = Record<ToolbarVisibilityKey, boolean>;
 
@@ -30,6 +41,7 @@ export type AppPreferences = {
   language: LanguagePreference;
   appearance: "light" | "dark" | "system";
   theme: AppTheme;
+  noteLayoutSize: NoteLayoutSize;
   toolbarVisibility: ToolbarVisibilityPreferences;
 };
 
@@ -43,3 +55,10 @@ export type AppExportData = {
 };
 
 export type ThemeOption = { value: AppTheme; label: string; swatches: [string, string, string] };
+
+
+
+
+
+
+

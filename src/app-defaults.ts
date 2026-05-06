@@ -7,12 +7,14 @@ import {
 } from "./app-types";
 
 export const themeOptions: ThemeOption[] = [
+  { value: "cloudy-day", label: "Cloudy Day", swatches: ["#525252", "#737373", "#d4d4d4"] },
   { value: "blue-lagoon", label: "Blue Lagoon", swatches: ["#2563eb", "#60a5fa", "#bfdbfe"] },
   { value: "green-forest", label: "Green Forest", swatches: ["#2f6f4f", "#4aa46f", "#cfead8"] },
-  { value: "rose-pine", label: "Rose Pine", swatches: ["#b24f7b", "#e38db0", "#f7d6e3"] },
   { value: "orange-soda", label: "Orange Soda", swatches: ["#dd6b20", "#fb923c", "#fed7aa"] },
   { value: "catpuccin", label: "Catppuccino", swatches: ["#8b6b5c", "#c4a484", "#ead8c8"] },
-  { value: "purple-haze", label: "Purple Haze", swatches: ["#7c3aed", "#a78bfa", "#ddd6fe"] }
+  { value: "purple-haze", label: "Purple Haze", swatches: ["#7c3aed", "#a78bfa", "#ddd6fe"] },
+  { value: "fuchsia", label: "Fuchsia", swatches: ["#d946ef", "#f472b6", "#f5d0fe"] },
+  { value: "can-can", label: "Rose Pine", swatches: ["#f27db4", "#f6a3c9", "#ffd6e8"] }
 ];
 
 export function defaultToolbarVisibility(): ToolbarVisibilityPreferences {
@@ -69,6 +71,7 @@ export function defaultAppPreferences(): AppPreferences {
     language: "system",
     appearance: "system",
     theme: "blue-lagoon",
+    noteLayoutSize: "medium",
     toolbarVisibility: defaultToolbarVisibility()
   };
 }
@@ -86,3 +89,7 @@ export function formatCreatedAtLabel(createdAt: string, locale: EffectiveLanguag
 
   return capitalizedMonth + " " + day + ", " + year;
 }
+
+
+
+

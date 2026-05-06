@@ -1,10 +1,11 @@
 import { ArrowNarrowLeft, ChevronDown, Laptop01, Moon02, Sun } from "@untitledui/icons";
 import { type ReactNode } from "react";
-import { type AppPreferences, type AppTheme, type ThemeOption, type ToolbarVisibilityKey } from "../../app-model";
+import { type AppPreferences, type AppTheme, type NoteLayoutSize, type ThemeOption, type ToolbarVisibilityKey } from "../../app-model";
 import { type LanguagePreference, type TranslationDictionary } from "../../i18n";
 
 type LanguageOption = { value: LanguagePreference; label: string };
 type ToolbarVisibilityOption = { value: ToolbarVisibilityKey; label: string; icon: ReactNode };
+type NoteLayoutOption = { value: NoteLayoutSize; label: string };
 
 type SettingsPageProps = {
   t: TranslationDictionary;
@@ -12,10 +13,13 @@ type SettingsPageProps = {
   appPreferences: AppPreferences;
   languageOptions: LanguageOption[];
   selectedLanguageLabel: string;
+  selectedNoteLayoutLabel: string;
   isLanguageMenuOpen: boolean;
   isThemeMenuOpen: boolean;
+  isLayoutMenuOpen: boolean;
   selectedTheme: ThemeOption;
   themeOptions: ThemeOption[];
+  noteLayoutOptions: NoteLayoutOption[];
   toolbarVisibilityOptions: ToolbarVisibilityOption[];
   visibleToolbarGroupsCount: number;
   notesLocationLabel: string;
@@ -26,9 +30,11 @@ type SettingsPageProps = {
   closeFloatingMenus: () => void;
   setIsLanguageMenuOpen: (open: boolean) => void;
   setIsThemeMenuOpen: (open: boolean) => void;
+  setIsLayoutMenuOpen: (open: boolean) => void;
   onLanguageChange: (value: LanguagePreference) => void;
   onAppearanceChange: (value: "light" | "dark" | "system") => void;
   onThemeChange: (value: AppTheme) => void;
+  onNoteLayoutChange: (value: NoteLayoutSize) => void;
   onToggleToolbarVisibility: (value: ToolbarVisibilityKey) => void;
   onOpenNotesStorageDirectory: () => void | Promise<void>;
   onChooseNotesStorageDirectory: () => void | Promise<void>;
@@ -42,10 +48,13 @@ export function SettingsPage({
   appPreferences,
   languageOptions,
   selectedLanguageLabel,
+  selectedNoteLayoutLabel,
   isLanguageMenuOpen,
   isThemeMenuOpen,
+  isLayoutMenuOpen,
   selectedTheme,
   themeOptions,
+  noteLayoutOptions,
   toolbarVisibilityOptions,
   visibleToolbarGroupsCount,
   notesLocationLabel,
@@ -56,9 +65,11 @@ export function SettingsPage({
   closeFloatingMenus,
   setIsLanguageMenuOpen,
   setIsThemeMenuOpen,
+  setIsLayoutMenuOpen,
   onLanguageChange,
   onAppearanceChange,
   onThemeChange,
+  onNoteLayoutChange,
   onToggleToolbarVisibility,
   onOpenNotesStorageDirectory,
   onChooseNotesStorageDirectory,
@@ -132,6 +143,50 @@ export function SettingsPage({
                 <button type="button" className={appPreferences.appearance === "light" ? "settings-segment active" : "settings-segment"} onClick={() => onAppearanceChange("light")}><Sun size={14} /><span>{t.appearanceLight}</span></button>
                 <button type="button" className={appPreferences.appearance === "dark" ? "settings-segment active" : "settings-segment"} onClick={() => onAppearanceChange("dark")}><Moon02 size={14} /><span>{t.appearanceDark}</span></button>
                 <button type="button" className={appPreferences.appearance === "system" ? "settings-segment active" : "settings-segment"} onClick={() => onAppearanceChange("system")}><Laptop01 size={14} /><span>{t.appearanceSystem}</span></button>
+              </div>
+            </div>
+          </section>
+
+          <section className="settings-row">
+            <div className="settings-row-copy">
+              <h2>{t.settingsNoteLayoutTitle}</h2>
+              <p>{t.settingsNoteLayoutDescription}</p>
+            </div>
+            <div className="settings-row-control">
+              <div className="settings-select-shell settings-select-shell-auto" onPointerDown={(event) => event.stopPropagation()}>
+                <button
+                  type="button"
+                  className={isLayoutMenuOpen ? "settings-select-trigger settings-select-trigger-auto open" : "settings-select-trigger settings-select-trigger-auto"}
+                  aria-haspopup="menu"
+                  aria-expanded={isLayoutMenuOpen}
+                  onClick={() => {
+                    const nextOpen = !isLayoutMenuOpen;
+                    closeFloatingMenus();
+                    setIsLayoutMenuOpen(nextOpen);
+                  }}
+                >
+                  <span>{selectedNoteLayoutLabel}</span>
+                </button>
+                <ChevronDown size={14} />
+                {isLayoutMenuOpen ? (
+                  <div className="settings-select-popover" role="menu" aria-label={t.settingsNoteLayoutTitle}>
+                    {noteLayoutOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={appPreferences.noteLayoutSize === option.value}
+                        className={appPreferences.noteLayoutSize === option.value ? "settings-select-option active" : "settings-select-option"}
+                        onClick={() => {
+                          onNoteLayoutChange(option.value);
+                          setIsLayoutMenuOpen(false);
+                        }}
+                      >
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>
@@ -268,4 +323,7 @@ export function SettingsPage({
     </section>
   );
 }
+
+
+
 

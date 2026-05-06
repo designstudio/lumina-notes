@@ -1,4 +1,4 @@
-import {
+﻿import {
   Bold01,
   AlignCenter,
   AlignLeft,
@@ -66,6 +66,7 @@ import {
   type CustomFolder,
   type FolderSettings,
   type ModalKey,
+  type NoteLayoutSize,
   type ToolbarMenu,
   type ToolbarVisibilityKey,
   type ToolbarVisibilityPreferences,
@@ -84,6 +85,8 @@ import { SidebarPane } from "./components/sidebar/SidebarPane";
 const SearchModal = lazy(() => import("./components/modals/SearchModal").then((module) => ({ default: module.SearchModal })));
 const ClearDataModal = lazy(() => import("./components/modals/ClearDataModal").then((module) => ({ default: module.ClearDataModal })));
 const CreateFolderModal = lazy(() => import("./components/modals/CreateFolderModal").then((module) => ({ default: module.CreateFolderModal })));
+const DeleteFolderModal = lazy(() => import("./components/modals/DeleteFolderModal").then((module) => ({ default: module.DeleteFolderModal })));
+const DeleteNoteModal = lazy(() => import("./components/modals/DeleteNoteModal").then((module) => ({ default: module.DeleteNoteModal })));
 
 
 const fixedSections = [
@@ -95,6 +98,7 @@ const storageKey = "lumina-notes-state";
 const folderSettingsKey = "lumina-notes-folder-settings";
 const uiStateKey = "lumina-notes-ui-state";
 const appPreferencesKey = "lumina-notes-preferences";
+const availableThemeValues = new Set<AppTheme>(themeOptions.map((option) => option.value));
 
 const markdownConverter = new TurndownService({
   headingStyle: "atx",
@@ -124,6 +128,7 @@ const NOTE_CONTEXT_MENU_HEIGHT = 186;
 const FOLDER_CONTEXT_MENU_WIDTH = 148;
 const FOLDER_CONTEXT_MENU_HEIGHT = 138;
 const MODAL_EXIT_DURATION_MS = 180;
+const MENU_POPOVER_DURATION_MS = 150;
 const AUTOSAVE_DELAY_MS = 350;
 
 type NotesStorageInfo = {
@@ -258,7 +263,9 @@ function uiStateFromLocalStorage(): UiState {
   if (!raw) {
     return {
       sidebarCollapsed: false,
-      expandedSections: defaults
+      expandedSections: defaults,
+      activeFolder: "get-started",
+      selectedNoteId: ""
     };
   }
 
@@ -269,7 +276,9 @@ function uiStateFromLocalStorage(): UiState {
       expandedSections: {
         ...defaults,
         ...(parsed.expandedSections ?? {})
-      }
+      },
+      activeFolder: typeof parsed.activeFolder === "string" ? parsed.activeFolder as FolderKey : "get-started",
+      selectedNoteId: typeof parsed.selectedNoteId === "string" ? parsed.selectedNoteId : ""
     };
   } catch {
     return {
@@ -290,7 +299,8 @@ function appPreferencesFromLocalStorage(): AppPreferences {
     return {
       language: parsed.language === "pt-BR" || parsed.language === "en-US" ? parsed.language : "system",
       appearance: parsed.appearance === "light" || parsed.appearance === "dark" ? parsed.appearance : "system",
-      theme: parsed.theme === "blue-lagoon" || parsed.theme === "green-forest" || parsed.theme === "rose-pine" || parsed.theme === "orange-soda" || parsed.theme === "catpuccin" || parsed.theme === "purple-haze" ? parsed.theme : "blue-lagoon",
+      theme: parsed.theme === "rose-pine" ? "can-can" : parsed.theme && availableThemeValues.has(parsed.theme as AppTheme) ? parsed.theme as AppTheme : "blue-lagoon",
+      noteLayoutSize: parsed.noteLayoutSize === "full" ? "full" : "medium",
       toolbarVisibility: toolbarVisibilityFromPartial(parsed.toolbarVisibility)
     };
   } catch {
@@ -613,8 +623,8 @@ export default function App() {
   const initialLanguage = resolveLanguage(initialAppPreferences.language, window.navigator.language);
   const [notes, setNotes] = useState<Note[]>(() => normalizeDefaultNotes(notesFromLocalStorage() ?? ensureDefaultNotes(withSortOrder(getDemoNotes(initialLanguage))), initialLanguage));
   const [storageReady, setStorageReady] = useState(!window.lumina?.notes);
-  const [activeFolder, setActiveFolder] = useState<FolderKey>("get-started");
-  const [selectedId, setSelectedId] = useState(notes[0]?.id ?? "");
+  const [activeFolder, setActiveFolder] = useState<FolderKey>(initialUiState.activeFolder);
+  const [selectedId, setSelectedId] = useState(initialUiState.selectedNoteId || notes[0]?.id || "");
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("notes");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialUiState.sidebarCollapsed);
   const [toolbarMenu, setToolbarMenu] = useState<ToolbarMenu>(null);
@@ -631,7 +641,14 @@ export default function App() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const noteHeaderMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const modalCloseTimeoutsRef = useRef<Partial<Record<ModalKey, number>>>({});
-  const modalVisibilityRef = useRef<Record<ModalKey, boolean>>({ search: false, "clear-data": false, "create-folder": false });
+  const modalVisibilityRef = useRef<Record<ModalKey, boolean>>({ search: false, "clear-data": false, "create-folder": false, "delete-folder": false, "delete-note": false });
+  const menuCloseTimeoutsRef = useRef<{
+    language?: number;
+    theme?: number;
+    noteActions?: number;
+    noteContext?: number;
+    folderContext?: number;
+  }>({});
   const [noteContextMenu, setNoteContextMenu] = useState<NoteContextMenuState>(null);
   const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null);
   const [sidebarTooltip, setSidebarTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
@@ -643,15 +660,30 @@ export default function App() {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dropTargetFolder, setDropTargetFolder] = useState<FolderKey | null>(null);
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
+  const [isDeleteFolderModalOpen, setIsDeleteFolderModalOpen] = useState(false);
+  const [isDeleteNoteModalOpen, setIsDeleteNoteModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isClearDataModalOpen, setIsClearDataModalOpen] = useState(false);
-  const [closingModals, setClosingModals] = useState<Record<ModalKey, boolean>>({ search: false, "clear-data": false, "create-folder": false });
+  const [closingModals, setClosingModals] = useState<Record<ModalKey, boolean>>({ search: false, "clear-data": false, "create-folder": false, "delete-folder": false, "delete-note": false });
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
   const [isNoteActionsMenuOpen, setIsNoteActionsMenuOpen] = useState(false);
   const [noteActionsMenuPosition, setNoteActionsMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isLanguageMenuVisible, setIsLanguageMenuVisible] = useState(false);
+  const [isLanguageMenuClosing, setIsLanguageMenuClosing] = useState(false);
+  const [isThemeMenuVisible, setIsThemeMenuVisible] = useState(false);
+  const [isThemeMenuClosing, setIsThemeMenuClosing] = useState(false);
+  const [renderedNoteActionsMenuPosition, setRenderedNoteActionsMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isNoteActionsMenuClosing, setIsNoteActionsMenuClosing] = useState(false);
+  const [renderedNoteContextMenu, setRenderedNoteContextMenu] = useState<NoteContextMenuState>(null);
+  const [isNoteContextMenuClosing, setIsNoteContextMenuClosing] = useState(false);
+  const [renderedFolderContextMenu, setRenderedFolderContextMenu] = useState<FolderContextMenuState>(null);
+  const [isFolderContextMenuClosing, setIsFolderContextMenuClosing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
+  const [folderPendingDeletion, setFolderPendingDeletion] = useState<{ folderKey: FolderKey; label: string } | null>(null);
+  const [notePendingDeletion, setNotePendingDeletion] = useState<{ noteId: string; title: string } | null>(null);
   const notesRef = useRef(notes);
   const [sidebarScrolled, setSidebarScrolled] = useState(false);
   const [notesStorageInfo, setNotesStorageInfo] = useState<NotesStorageInfo | null>(null);
@@ -663,12 +695,17 @@ export default function App() {
   const selectedNoteRef = useRef<Note | undefined>(undefined);
   const draftNoteRef = useRef<Note | null>(notes[0] ?? null);
   const dirtyDraftRef = useRef(false);
+  const draftCommitTimeoutRef = useRef<number | null>(null);
   const previousSelectedIdRef = useRef(selectedId);
   const resolvedAppearance = appPreferences.appearance === "system" ? (systemPrefersDark ? "dark" : "light") : appPreferences.appearance;
   const resolvedLanguage = resolveLanguage(appPreferences.language, window.navigator.language);
   const selectedTheme = themeOptions.find((option) => option.value === appPreferences.theme) ?? themeOptions[0];
   const t = translations[resolvedLanguage];
   const languageOptions = getLanguageOptions(resolvedLanguage);
+  const noteLayoutOptions: Array<{ value: NoteLayoutSize; label: string }> = [
+    { value: "medium", label: t.layoutSizeMedium },
+    { value: "full", label: t.layoutSizeFull }
+  ];
   const toolbarVisibilityOptions: Array<{ value: ToolbarVisibilityKey; label: string; icon: JSX.Element }> = [
     { value: "history", label: t.toolbarVisibilityHistory, icon: <ReverseLeft size={16} /> },
     { value: "headings", label: t.toolbarVisibilityHeadings, icon: <Heading01 size={16} /> },
@@ -690,6 +727,7 @@ export default function App() {
   ];
   const visibleToolbarGroupsCount = toolbarVisibilityOptions.filter((option) => appPreferences.toolbarVisibility[option.value]).length;
   const selectedLanguageLabel = languageOptions.find((option) => option.value === appPreferences.language)?.label ?? t.languageOptionSystem;
+  const selectedNoteLayoutLabel = noteLayoutOptions.find((option) => option.value === appPreferences.noteLayoutSize)?.label ?? t.layoutSizeMedium;
   const notesLocationLabel = !window.lumina?.notes
     ? t.notesLocationBrowser
     : isNotesStorageLoading
@@ -791,6 +829,116 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    window.clearTimeout(menuCloseTimeoutsRef.current.language);
+
+    if (isLanguageMenuOpen) {
+      setIsLanguageMenuVisible(true);
+      setIsLanguageMenuClosing(false);
+      return;
+    }
+
+    if (!isLanguageMenuVisible) {
+      return;
+    }
+
+    setIsLanguageMenuClosing(true);
+    menuCloseTimeoutsRef.current.language = window.setTimeout(() => {
+      setIsLanguageMenuVisible(false);
+      setIsLanguageMenuClosing(false);
+    }, MENU_POPOVER_DURATION_MS);
+  }, [isLanguageMenuOpen, isLanguageMenuVisible]);
+
+  useEffect(() => {
+    window.clearTimeout(menuCloseTimeoutsRef.current.theme);
+
+    if (isThemeMenuOpen) {
+      setIsThemeMenuVisible(true);
+      setIsThemeMenuClosing(false);
+      return;
+    }
+
+    if (!isThemeMenuVisible) {
+      return;
+    }
+
+    setIsThemeMenuClosing(true);
+    menuCloseTimeoutsRef.current.theme = window.setTimeout(() => {
+      setIsThemeMenuVisible(false);
+      setIsThemeMenuClosing(false);
+    }, MENU_POPOVER_DURATION_MS);
+  }, [isThemeMenuOpen, isThemeMenuVisible]);
+
+  useEffect(() => {
+    window.clearTimeout(menuCloseTimeoutsRef.current.noteActions);
+
+    if (isNoteActionsMenuOpen && noteActionsMenuPosition) {
+      setRenderedNoteActionsMenuPosition(noteActionsMenuPosition);
+      setIsNoteActionsMenuClosing(false);
+      return;
+    }
+
+    if (!renderedNoteActionsMenuPosition) {
+      return;
+    }
+
+    setIsNoteActionsMenuClosing(true);
+    menuCloseTimeoutsRef.current.noteActions = window.setTimeout(() => {
+      setRenderedNoteActionsMenuPosition(null);
+      setIsNoteActionsMenuClosing(false);
+    }, MENU_POPOVER_DURATION_MS);
+  }, [isNoteActionsMenuOpen, noteActionsMenuPosition, renderedNoteActionsMenuPosition]);
+
+  useEffect(() => {
+    window.clearTimeout(menuCloseTimeoutsRef.current.noteContext);
+
+    if (noteContextMenu) {
+      setRenderedNoteContextMenu(noteContextMenu);
+      setIsNoteContextMenuClosing(false);
+      return;
+    }
+
+    if (!renderedNoteContextMenu) {
+      return;
+    }
+
+    setIsNoteContextMenuClosing(true);
+    menuCloseTimeoutsRef.current.noteContext = window.setTimeout(() => {
+      setRenderedNoteContextMenu(null);
+      setIsNoteContextMenuClosing(false);
+    }, MENU_POPOVER_DURATION_MS);
+  }, [noteContextMenu, renderedNoteContextMenu]);
+
+  useEffect(() => {
+    window.clearTimeout(menuCloseTimeoutsRef.current.folderContext);
+
+    if (folderContextMenu) {
+      setRenderedFolderContextMenu(folderContextMenu);
+      setIsFolderContextMenuClosing(false);
+      return;
+    }
+
+    if (!renderedFolderContextMenu) {
+      return;
+    }
+
+    setIsFolderContextMenuClosing(true);
+    menuCloseTimeoutsRef.current.folderContext = window.setTimeout(() => {
+      setRenderedFolderContextMenu(null);
+      setIsFolderContextMenuClosing(false);
+    }, MENU_POPOVER_DURATION_MS);
+  }, [folderContextMenu, renderedFolderContextMenu]);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(menuCloseTimeoutsRef.current.language);
+      window.clearTimeout(menuCloseTimeoutsRef.current.theme);
+      window.clearTimeout(menuCloseTimeoutsRef.current.noteActions);
+      window.clearTimeout(menuCloseTimeoutsRef.current.noteContext);
+      window.clearTimeout(menuCloseTimeoutsRef.current.folderContext);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isNoteActionsMenuOpen) {
       return;
     }
@@ -800,6 +948,7 @@ export default function App() {
     setToolbarMenu(null);
     setIsLanguageMenuOpen(false);
     setIsThemeMenuOpen(false);
+    setIsLayoutMenuOpen(false);
   }, [isNoteActionsMenuOpen]);
 
   useEffect(() => {
@@ -835,6 +984,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedAppearance;
     document.documentElement.dataset.colorTheme = appPreferences.theme;
+    document.documentElement.dataset.noteLayout = appPreferences.noteLayoutSize;
     document.documentElement.style.colorScheme = resolvedAppearance;
     document.documentElement.lang = resolvedLanguage;
 
@@ -843,7 +993,7 @@ export default function App() {
         console.error("Could not sync window appearance", error);
       });
     }
-  }, [appPreferences.theme, resolvedAppearance, resolvedLanguage]);
+  }, [appPreferences.noteLayoutSize, appPreferences.theme, resolvedAppearance, resolvedLanguage]);
 
   useEffect(() => {
     setNotes((current) => normalizeDefaultNotes(current, resolvedLanguage));
@@ -859,10 +1009,12 @@ export default function App() {
       uiStateKey,
       JSON.stringify({
         sidebarCollapsed,
-        expandedSections
+        expandedSections,
+        activeFolder,
+        selectedNoteId: selectedId
       })
     );
-  }, [expandedSections, sidebarCollapsed]);
+  }, [activeFolder, expandedSections, selectedId, sidebarCollapsed]);
 
   useEffect(() => {
     if (folderSettings.customFolders.length === 0) {
@@ -944,7 +1096,15 @@ export default function App() {
       allNotes
     ];
   }, [folderSettings, t.fixedFolderAllNotes, t.fixedFolderGetStarted]);
-
+  useEffect(() => {
+    if (activeFolder === "all") {
+      return;
+    }
+    const folderStillExists = visibleSections.some((section) => section.key === activeFolder);
+    if (!folderStillExists) {
+      setActiveFolder("all");
+    }
+  }, [activeFolder, visibleSections]);
   const selectedNoteSource = filteredNotes.find((note) => note.id === selectedId) ?? filteredNotes[0] ?? notes[0];
   const currentDraftNote = isActiveNoteDirty && draftNoteRef.current?.id === selectedNoteSource?.id
     ? draftNoteRef.current
@@ -971,6 +1131,34 @@ export default function App() {
         console.error("Could not save local notes", error);
       });
     }
+  }
+
+  function clearDraftCommitTimeout() {
+    if (draftCommitTimeoutRef.current !== null) {
+      window.clearTimeout(draftCommitTimeoutRef.current);
+      draftCommitTimeoutRef.current = null;
+    }
+  }
+
+  function commitPendingDraftToNotes() {
+    const pendingDraft = draftNoteRef.current;
+    if (!dirtyDraftRef.current || !pendingDraft) {
+      clearDraftCommitTimeout();
+      return;
+    }
+
+    setNotes((current) => mergeNoteIntoCollection(current, pendingDraft));
+    setActiveNoteDraft(pendingDraft);
+    dirtyDraftRef.current = false;
+    setIsActiveNoteDirty(false);
+    clearDraftCommitTimeout();
+  }
+
+  function scheduleDraftCommit() {
+    clearDraftCommitTimeout();
+    draftCommitTimeoutRef.current = window.setTimeout(() => {
+      commitPendingDraftToNotes();
+    }, AUTOSAVE_DELAY_MS);
   }
 
   useEffect(() => {
@@ -1060,7 +1248,9 @@ export default function App() {
       }, t.emptyNote);
 
       draftNoteRef.current = nextDraft;
+      dirtyDraftRef.current = true;
       selectedNoteRef.current = nextDraft;
+      scheduleDraftCommit();
       setIsActiveNoteDirty(true);
     }
   }, [selectedNote?.id, resolvedLanguage]);
@@ -1121,19 +1311,17 @@ export default function App() {
       setSelectedId(selectedNote.id);
     }
   }, [selectedId, selectedNote]);
-
   useEffect(() => {
     const previousSelectedId = previousSelectedIdRef.current;
     if (previousSelectedId !== selectedId && draftNoteRef.current?.id === previousSelectedId && dirtyDraftRef.current) {
-      setNotes((current) => mergeNoteIntoCollection(current, draftNoteRef.current));
-      setIsActiveNoteDirty(false);
+      commitPendingDraftToNotes();
     }
 
     previousSelectedIdRef.current = selectedId;
   }, [selectedId]);
-
   useEffect(() => {
     if (!selectedNoteSource) {
+      clearDraftCommitTimeout();
       setActiveNoteDraft(null);
       draftNoteRef.current = null;
       selectedNoteRef.current = undefined;
@@ -1143,6 +1331,7 @@ export default function App() {
     }
 
     if (activeNoteDraft?.id !== selectedNoteSource.id) {
+      clearDraftCommitTimeout();
       setActiveNoteDraft(selectedNoteSource);
       draftNoteRef.current = selectedNoteSource;
       selectedNoteRef.current = selectedNoteSource;
@@ -1256,26 +1445,10 @@ export default function App() {
   }, [renamingFolderKey]);
 
   useEffect(() => {
-    if (!isActiveNoteDirty || !draftNoteRef.current) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      const pendingDraft = draftNoteRef.current;
-      if (!pendingDraft) {
-        return;
-      }
-
-      setNotes((current) => mergeNoteIntoCollection(current, pendingDraft));
-      setActiveNoteDraft(pendingDraft);
-      dirtyDraftRef.current = false;
-      setIsActiveNoteDirty(false);
-    }, AUTOSAVE_DELAY_MS);
-
     return () => {
-      window.clearTimeout(timeoutId);
+      clearDraftCommitTimeout();
     };
-  }, [isActiveNoteDirty, selectedId]);
+  }, []);
 
   useEffect(() => {
     if (!storageReady) {
@@ -1297,6 +1470,10 @@ export default function App() {
 
   useEffect(() => {
     if (!editor || !selectedNote) {
+      return;
+    }
+
+    if (dirtyDraftRef.current && draftNoteRef.current?.id === selectedNote.id) {
       return;
     }
 
@@ -1332,9 +1509,11 @@ export default function App() {
     modalVisibilityRef.current = {
       search: isSearchModalOpen || closingModals.search,
       "clear-data": isClearDataModalOpen || closingModals["clear-data"],
-      "create-folder": isCreateFolderModalOpen || closingModals["create-folder"]
+      "create-folder": isCreateFolderModalOpen || closingModals["create-folder"],
+      "delete-folder": isDeleteFolderModalOpen || closingModals["delete-folder"],
+      "delete-note": isDeleteNoteModalOpen || closingModals["delete-note"]
     };
-  }, [closingModals, isClearDataModalOpen, isCreateFolderModalOpen, isSearchModalOpen]);
+  }, [closingModals, isClearDataModalOpen, isCreateFolderModalOpen, isDeleteFolderModalOpen, isDeleteNoteModalOpen, isSearchModalOpen]);
 
   useEffect(() => {
     return () => {
@@ -1366,6 +1545,14 @@ export default function App() {
           closeSearchModal();
         }
 
+        if (modalVisibilityRef.current["delete-folder"]) {
+          closeDeleteFolderModal();
+        }
+
+        if (modalVisibilityRef.current["delete-note"]) {
+          closeDeleteNoteModal();
+        }
+
         if (modalVisibilityRef.current["clear-data"]) {
           closeClearDataModal();
         }
@@ -1387,6 +1574,7 @@ export default function App() {
     setToolbarMenu(null);
     setIsLanguageMenuOpen(false);
     setIsThemeMenuOpen(false);
+    setIsLayoutMenuOpen(false);
     setIsNoteActionsMenuOpen(false);
     setNoteActionsMenuPosition(null);
   }
@@ -1397,6 +1585,7 @@ export default function App() {
     setToolbarMenu(null);
     setIsLanguageMenuOpen(false);
     setIsThemeMenuOpen(false);
+    setIsLayoutMenuOpen(false);
   }
 
   function toggleToolbarVisibilityPreference(key: ToolbarVisibilityKey) {
@@ -1470,6 +1659,36 @@ export default function App() {
     });
   }
 
+  function openDeleteFolderModal(folderKey: FolderKey) {
+    cancelModalClose("delete-folder");
+    setNoteContextMenu(null);
+    setFolderContextMenu(null);
+    setFolderPendingDeletion({ folderKey, label: folderLabel(folderKey) });
+    setIsDeleteFolderModalOpen(true);
+  }
+
+  function closeDeleteFolderModal() {
+    beginModalClose("delete-folder", () => {
+      setIsDeleteFolderModalOpen(false);
+      setFolderPendingDeletion(null);
+    });
+  }
+
+  function openDeleteNoteModal(noteId: string, title: string) {
+    cancelModalClose("delete-note");
+    setNoteContextMenu(null);
+    setIsNoteActionsMenuOpen(false);
+    setNotePendingDeletion({ noteId, title });
+    setIsDeleteNoteModalOpen(true);
+  }
+
+  function closeDeleteNoteModal() {
+    beginModalClose("delete-note", () => {
+      setIsDeleteNoteModalOpen(false);
+      setNotePendingDeletion(null);
+    });
+  }
+
   function openSearchResult(noteId: string, folderKey: FolderKey) {
     setWorkspaceView("notes");
     setActiveFolder(folderKey);
@@ -1506,8 +1725,10 @@ export default function App() {
     const nextDraft = applyNoteDraftPatch(selectedNoteRef.current, patch, t.emptyNote);
     selectedNoteRef.current = nextDraft;
     draftNoteRef.current = nextDraft;
+    dirtyDraftRef.current = true;
     setActiveNoteDraft(nextDraft);
     setIsActiveNoteDirty(true);
+    scheduleDraftCommit();
   }
 
   function addNewNote() {
@@ -1518,7 +1739,6 @@ export default function App() {
     setSelectedId(note.id);
     setActiveFolder("all");
   }
-
   function addNewNoteToFolder(folderKey: FolderKey) {
     setWorkspaceView("notes");
     const nextSortOrder = notes.reduce((highest, note) => Math.max(highest, note.sortOrder ?? 0), -1) + 1;
@@ -1604,7 +1824,9 @@ export default function App() {
     const nextFolderSettings = defaultFolderSettings();
     const nextUiState = {
       sidebarCollapsed: false,
-      expandedSections: defaultExpandedSections()
+      expandedSections: defaultExpandedSections(),
+      activeFolder: "get-started" as FolderKey,
+      selectedNoteId: nextNotes[0]?.id ?? ""
     };
 
     setIsClearDataModalOpen(false);
@@ -1613,8 +1835,13 @@ export default function App() {
     setSearchQuery("");
     setIsSearchModalOpen(false);
     setIsCreateFolderModalOpen(false);
+    setIsDeleteFolderModalOpen(false);
+    setIsDeleteNoteModalOpen(false);
+    setFolderPendingDeletion(null);
+    setNotePendingDeletion(null);
     setIsLanguageMenuOpen(false);
     setIsThemeMenuOpen(false);
+    setIsLayoutMenuOpen(false);
     setNoteContextMenu(null);
     setFolderContextMenu(null);
     setRenamingNoteId(null);
@@ -1628,9 +1855,9 @@ export default function App() {
     setAppPreferences(nextPreferences);
     setExpandedSections(nextUiState.expandedSections);
     setSidebarCollapsed(nextUiState.sidebarCollapsed);
-    setActiveFolder("get-started");
+    setActiveFolder(nextUiState.activeFolder);
     setNotes(nextNotes);
-    setSelectedId(nextNotes[0]?.id ?? "");
+    setSelectedId(nextUiState.selectedNoteId);
 
     window.localStorage.removeItem(storageKey);
     window.localStorage.removeItem(folderSettingsKey);
@@ -1769,12 +1996,18 @@ export default function App() {
       return;
     }
 
-    const label = folderLabel(folderKey);
-    const confirmed = window.confirm(t.confirmDeleteFolder(label, t.fixedFolderAllNotes));
+    openDeleteFolderModal(folderKey);
+  }
 
-    if (!confirmed) {
+  function confirmDeleteFolder() {
+    const pendingFolder = folderPendingDeletion;
+    if (!pendingFolder) {
       return;
     }
+
+    const folderKey = pendingFolder.folderKey;
+    setIsDeleteFolderModalOpen(false);
+    setFolderPendingDeletion(null);
 
     setNotes((current) =>
       current.map((note) =>
@@ -1991,13 +2224,18 @@ export default function App() {
       return;
     }
 
-    const confirmed = window.confirm(t.confirmDeleteNote(targetNote.title));
-    setNoteContextMenu(null);
-    setIsNoteActionsMenuOpen(false);
+    openDeleteNoteModal(noteId, targetNote.title);
+  }
 
-    if (!confirmed) {
+  function confirmDeleteNote() {
+    const pendingNote = notePendingDeletion;
+    if (!pendingNote) {
       return;
     }
+
+    const noteId = pendingNote.noteId;
+    setIsDeleteNoteModalOpen(false);
+    setNotePendingDeletion(null);
 
     const remainingNotes = notes.filter((note) => note.id !== noteId);
 
@@ -2307,10 +2545,17 @@ export default function App() {
               appPreferences={appPreferences}
               languageOptions={languageOptions}
               selectedLanguageLabel={selectedLanguageLabel}
+              selectedNoteLayoutLabel={selectedNoteLayoutLabel}
               isLanguageMenuOpen={isLanguageMenuOpen}
+              isLanguageMenuVisible={isLanguageMenuVisible}
+              isLanguageMenuClosing={isLanguageMenuClosing}
               isThemeMenuOpen={isThemeMenuOpen}
+              isLayoutMenuOpen={isLayoutMenuOpen}
+              isThemeMenuVisible={isThemeMenuVisible}
+              isThemeMenuClosing={isThemeMenuClosing}
               selectedTheme={selectedTheme}
               themeOptions={themeOptions}
+              noteLayoutOptions={noteLayoutOptions}
               toolbarVisibilityOptions={toolbarVisibilityOptions}
               visibleToolbarGroupsCount={visibleToolbarGroupsCount}
               notesLocationLabel={notesLocationLabel}
@@ -2321,9 +2566,11 @@ export default function App() {
               closeFloatingMenus={closeFloatingMenus}
               setIsLanguageMenuOpen={setIsLanguageMenuOpen}
               setIsThemeMenuOpen={setIsThemeMenuOpen}
+              setIsLayoutMenuOpen={setIsLayoutMenuOpen}
               onLanguageChange={(value) => setAppPreferences((current) => ({ ...current, language: value }))}
               onAppearanceChange={(value) => setAppPreferences((current) => ({ ...current, appearance: value }))}
               onThemeChange={(value) => setAppPreferences((current) => ({ ...current, theme: value }))}
+              onNoteLayoutChange={(value) => setAppPreferences((current) => ({ ...current, noteLayoutSize: value }))}
               onToggleToolbarVisibility={toggleToolbarVisibilityPreference}
               onOpenNotesStorageDirectory={openNotesStorageDirectory}
               onChooseNotesStorageDirectory={chooseNotesStorageDirectory}
@@ -2382,10 +2629,10 @@ export default function App() {
           ) : null}
         </SimpleBar>
 
-        {isNoteActionsMenuOpen && noteActionsMenuPosition && selectedNote ? (
+        {renderedNoteActionsMenuPosition && selectedNote ? (
           <div
-            className="note-context-menu note-header-menu"
-            style={{ left: noteActionsMenuPosition.x, top: noteActionsMenuPosition.y }}
+            className={isNoteActionsMenuClosing ? "note-context-menu note-header-menu closing" : "note-context-menu note-header-menu"}
+            style={{ left: renderedNoteActionsMenuPosition.x, top: renderedNoteActionsMenuPosition.y }}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <button className="note-context-menu-item" onClick={() => void exportSelectedNoteAsPdf()}>
@@ -2427,19 +2674,19 @@ export default function App() {
           </div>
         ) : null}
 
-        {noteContextMenu ? (
+        {renderedNoteContextMenu ? (
           <div
             className="note-context-menu"
-            style={{ left: noteContextMenu.x, top: noteContextMenu.y }}
+            style={{ left: renderedNoteContextMenu.x, top: renderedNoteContextMenu.y }}
             onPointerDown={(event) => event.stopPropagation()}
           >
-            <button className="note-context-menu-item" onClick={() => renameNote(noteContextMenu.noteId, noteContextMenu.folderKey)}>
+            <button className="note-context-menu-item" onClick={() => renameNote(renderedNoteContextMenu.noteId, renderedNoteContextMenu.folderKey)}>
               <Edit02 size={16} />
               <span>{t.contextRename}</span>
             </button>
-            <button className="note-context-menu-item" onClick={() => togglePinnedNote(noteContextMenu.noteId)}>
+            <button className="note-context-menu-item" onClick={() => togglePinnedNote(renderedNoteContextMenu.noteId)}>
               <Pin02 size={16} />
-              <span>{notes.find((note) => note.id === noteContextMenu.noteId)?.pinned ? t.contextUnpinNote : t.contextPinNote}</span>
+              <span>{notes.find((note) => note.id === renderedNoteContextMenu.noteId)?.pinned ? t.contextUnpinNote : t.contextPinNote}</span>
             </button>
             <div className="note-context-menu-group move-group">
               <button className="note-context-menu-item has-submenu">
@@ -2454,14 +2701,14 @@ export default function App() {
                   <button
                     key={section.key}
                     className="note-context-menu-item"
-                    onClick={() => moveNoteToFolder(noteContextMenu.noteId, section.key as FolderKey)}
+                    onClick={() => moveNoteToFolder(renderedNoteContextMenu.noteId, section.key as FolderKey)}
                   >
                     {section.label}
                   </button>
                 ))}
               </div>
             </div>
-            <button className="note-context-menu-item danger" onClick={() => deleteNote(noteContextMenu.noteId)}>
+            <button className="note-context-menu-item danger" onClick={() => deleteNote(renderedNoteContextMenu.noteId)}>
               <Trash03 size={16} />
               <span>{t.contextDelete}</span>
             </button>
@@ -2474,28 +2721,28 @@ export default function App() {
           </div>
         ) : null}
 
-        {folderContextMenu ? (
+        {renderedFolderContextMenu ? (
           <div
             className="note-context-menu"
-            style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
+            style={{ left: renderedFolderContextMenu.x, top: renderedFolderContextMenu.y }}
             onPointerDown={(event) => event.stopPropagation()}
           >
-            {(isCustomFolder(folderContextMenu.folderKey) || folderContextMenu.folderKey === "get-started") ? (
-              <button className="note-context-menu-item" onClick={() => addNewNoteToFolder(folderContextMenu.folderKey)}>
+            {(isCustomFolder(renderedFolderContextMenu.folderKey) || renderedFolderContextMenu.folderKey === "get-started") ? (
+              <button className="note-context-menu-item" onClick={() => addNewNoteToFolder(renderedFolderContextMenu.folderKey)}>
                 <Edit05 size={16} />
                 <span>{t.contextNewNote}</span>
               </button>
             ) : null}
-            {canRenameFolder(folderContextMenu.folderKey) ? (
-              <button className="note-context-menu-item" onClick={() => renameFolder(folderContextMenu.folderKey)}>
+            {canRenameFolder(renderedFolderContextMenu.folderKey) ? (
+              <button className="note-context-menu-item" onClick={() => renameFolder(renderedFolderContextMenu.folderKey)}>
                 <Edit02 size={16} />
                 <span>{t.contextRenameFolder}</span>
               </button>
             ) : null}
             <button
               className="note-context-menu-item danger"
-              disabled={!canDeleteFolder(folderContextMenu.folderKey)}
-              onClick={() => deleteFolder(folderContextMenu.folderKey)}
+              disabled={!canDeleteFolder(renderedFolderContextMenu.folderKey)}
+              onClick={() => deleteFolder(renderedFolderContextMenu.folderKey)}
             >
               <Trash03 size={16} />
               <span>{t.contextDeleteFolder}</span>
@@ -2539,10 +2786,46 @@ export default function App() {
             onClose={closeCreateFolderModal}
             onCreate={createFolder}
           />
+          <DeleteFolderModal
+            isOpen={isDeleteFolderModalOpen}
+            isClosing={closingModals["delete-folder"]}
+            t={t}
+            title={t.contextDeleteFolder}
+            description={folderPendingDeletion ? t.confirmDeleteFolder(folderPendingDeletion.label, t.fixedFolderAllNotes) : ""}
+            cancelLabel={t.cancel}
+            confirmLabel={t.contextDeleteFolder}
+            onClose={closeDeleteFolderModal}
+            onConfirm={confirmDeleteFolder}
+          />
+          <DeleteNoteModal
+            isOpen={isDeleteNoteModalOpen}
+            isClosing={closingModals["delete-note"]}
+            t={t}
+            title={t.contextDelete}
+            description={notePendingDeletion ? t.confirmDeleteNote(notePendingDeletion.title) : ""}
+            cancelLabel={t.cancel}
+            confirmLabel={t.contextDelete}
+            onClose={closeDeleteNoteModal}
+            onConfirm={confirmDeleteNote}
+          />
         </Suspense>
       </main>
       </div>
     </>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

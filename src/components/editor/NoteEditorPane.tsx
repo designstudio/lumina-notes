@@ -1,4 +1,4 @@
-import {
+﻿import {
   AlignCenter,
   AlignLeft,
   AlignRight,
@@ -24,7 +24,7 @@ import {
   Underline01
 } from "@untitledui/icons";
 import { EditorContent, type Editor } from "@tiptap/react";
-import { type Dispatch, type MouseEvent, type RefObject, type SetStateAction } from "react";
+import { useRef, useState, type Dispatch, type MouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
 import { type ToolbarMenu, type ToolbarVisibilityPreferences } from "../../app-model";
 import { type EffectiveLanguage, type TranslationDictionary } from "../../i18n";
 import { type Note } from "../../types";
@@ -173,6 +173,95 @@ export function NoteEditorPane({
   removeLink,
   addImage
 }: NoteEditorPaneProps) {
+  const toolbarScrollRef = useRef<HTMLDivElement | null>(null);
+  const toolbarDragStateRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number; moved: boolean } | null>(null);
+  const toolbarSuppressClickRef = useRef(false);
+  const [toolbarTooltip, setToolbarTooltip] = useState<{ label: string; x: number; y: number } | null>(null);
+
+  function handleToolbarPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    const container = toolbarScrollRef.current;
+    if (!container || event.pointerType === "touch" || event.button !== 0 || container.scrollWidth <= container.clientWidth + 2) {
+      return;
+    }
+
+    toolbarSuppressClickRef.current = false;
+    toolbarDragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: container.scrollLeft,
+      moved: false
+    };
+
+    setToolbarTooltip(null);
+    container.setPointerCapture(event.pointerId);
+    container.classList.add("dragging");
+  }
+
+  function handleToolbarPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const container = toolbarScrollRef.current;
+    const dragState = toolbarDragStateRef.current;
+    if (!container || !dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - dragState.startX;
+    if (Math.abs(deltaX) > 3) {
+      dragState.moved = true;
+      toolbarSuppressClickRef.current = true;
+      setToolbarTooltip(null);
+    }
+
+    container.scrollLeft = dragState.startScrollLeft - deltaX;
+  }
+
+  function endToolbarPointerDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const container = toolbarScrollRef.current;
+    const dragState = toolbarDragStateRef.current;
+    if (!container || !dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (container.hasPointerCapture(event.pointerId)) {
+      container.releasePointerCapture(event.pointerId);
+    }
+
+    container.classList.remove("dragging");
+    toolbarDragStateRef.current = null;
+  }
+
+  function handleToolbarClickCapture(event: MouseEvent<HTMLDivElement>) {
+    if (toolbarSuppressClickRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      toolbarSuppressClickRef.current = false;
+    }
+  }
+
+  function handleToolbarMouseMove(event: MouseEvent<HTMLDivElement>) {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[aria-label]");
+    if (!button || button.disabled) {
+      setToolbarTooltip(null);
+      return;
+    }
+
+    const label = button.getAttribute("aria-label");
+    if (!label) {
+      setToolbarTooltip(null);
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    setToolbarTooltip({
+      label,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 10
+    });
+  }
+
+  function hideToolbarTooltip() {
+    setToolbarTooltip(null);
+  }
+
   return (
     <section className="editor-surface">
       <nav className="breadcrumb" aria-label={t.breadcrumbAria}>
@@ -206,17 +295,20 @@ export function NoteEditorPane({
         />
 
         <div
-          className="markdown-toolbar"
-          aria-label={t.markdownTools}
-          onPointerDown={(event) => event.stopPropagation()}
-          onMouseDown={(event) => {
-            if (event.target instanceof HTMLInputElement) {
-              return;
-            }
-
-            event.preventDefault();
-          }}
+          ref={toolbarScrollRef}
+          className="markdown-toolbar-scroll"
+          onPointerDown={handleToolbarPointerDown}
+          onPointerMove={handleToolbarPointerMove}
+          onPointerUp={endToolbarPointerDrag}
+          onPointerCancel={endToolbarPointerDrag}
+          onClickCapture={handleToolbarClickCapture}
+          onMouseMove={handleToolbarMouseMove}
+          onMouseLeave={hideToolbarTooltip}
         >
+          <div
+            className="markdown-toolbar"
+            aria-label={t.markdownTools}
+          >
           {toolbarVisibility.history ? (
             <div className="toolbar-group">
               <button type="button" aria-label={t.toolbarUndo} disabled={!editorUiState.canUndo} onClick={() => editor?.chain().focus().undo().run()}>
@@ -399,8 +491,15 @@ export function NoteEditorPane({
               </button>
             </div>
           ) : null}
+          </div>
         </div>
       </div>
+
+      {toolbarTooltip ? (
+        <div className="toolbar-floating-tooltip" style={{ left: toolbarTooltip.x, top: toolbarTooltip.y }}>
+          {toolbarTooltip.label}
+        </div>
+      ) : null}
 
       <div className="editor-body">
         <EditorContent editor={editor} />
@@ -408,4 +507,13 @@ export function NoteEditorPane({
     </section>
   );
 }
+
+
+
+
+
+
+
+
+
 
