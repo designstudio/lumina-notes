@@ -25,29 +25,9 @@ import {
 } from "@untitledui/icons";
 import { EditorContent, type Editor } from "@tiptap/react";
 import { type Dispatch, type MouseEvent, type RefObject, type SetStateAction } from "react";
+import { type ToolbarMenu, type ToolbarVisibilityPreferences } from "../../app-model";
 import { type EffectiveLanguage, type TranslationDictionary } from "../../i18n";
 import { type Note } from "../../types";
-
-type ToolbarMenu = "heading" | "list" | "table" | "highlight" | "link" | "text-align" | null;
-type ToolbarVisibilityPreferences = {
-  history: boolean;
-  headings: boolean;
-  quote: boolean;
-  lists: boolean;
-  tables: boolean;
-  bold: boolean;
-  italic: boolean;
-  strikethrough: boolean;
-  code: boolean;
-  underline: boolean;
-  highlight: boolean;
-  links: boolean;
-  superscript: boolean;
-  subscript: boolean;
-  separator: boolean;
-  textAlign: boolean;
-  image: boolean;
-};
 
 type EditorUiState = {
   canUndo: boolean;
@@ -428,3 +408,4 @@ export function NoteEditorPane({
     </section>
   );
 }
+

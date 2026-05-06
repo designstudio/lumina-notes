@@ -1,23 +1,15 @@
 import { ArrowNarrowLeft, ChevronDown, Laptop01, Moon02, Sun } from "@untitledui/icons";
 import { type ReactNode } from "react";
+import { type AppPreferences, type AppTheme, type ThemeOption, type ToolbarVisibilityKey } from "../../app-model";
 import { type LanguagePreference, type TranslationDictionary } from "../../i18n";
 
-type AppTheme = "blue-lagoon" | "green-forest" | "rose-pine" | "orange-soda" | "catpuccin" | "purple-haze";
-type ToolbarVisibilityKey = "history" | "headings" | "quote" | "lists" | "tables" | "bold" | "italic" | "strikethrough" | "code" | "underline" | "highlight" | "links" | "superscript" | "subscript" | "separator" | "textAlign" | "image";
-
-type ThemeOption = { value: AppTheme; label: string; swatches: [string, string, string] };
 type LanguageOption = { value: LanguagePreference; label: string };
 type ToolbarVisibilityOption = { value: ToolbarVisibilityKey; label: string; icon: ReactNode };
 
 type SettingsPageProps = {
   t: TranslationDictionary;
   appVersion: string;
-  appPreferences: {
-    language: LanguagePreference;
-    appearance: "light" | "dark" | "system";
-    theme: AppTheme;
-    toolbarVisibility: Record<ToolbarVisibilityKey, boolean>;
-  };
+  appPreferences: AppPreferences;
   languageOptions: LanguageOption[];
   selectedLanguageLabel: string;
   isLanguageMenuOpen: boolean;
@@ -276,3 +268,4 @@ export function SettingsPage({
     </section>
   );
 }
+
