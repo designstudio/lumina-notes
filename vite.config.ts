@@ -7,5 +7,37 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return;
+          }
+
+          if (id.includes("@tiptap")) {
+            return "tiptap-vendor";
+          }
+
+          if (
+            id.includes("react") ||
+            id.includes("scheduler") ||
+            id.includes("@untitledui/icons") ||
+            id.includes("simplebar-react")
+          ) {
+            return "react-vendor";
+          }
+
+          if (id.includes("simplebar")) {
+            return "ui-vendor";
+          }
+
+          if (id.includes("turndown")) {
+            return "export-vendor";
+          }
+        }
+      }
+    }
   }
 });

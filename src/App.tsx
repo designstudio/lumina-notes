@@ -1,5 +1,4 @@
 import {
-  ArrowNarrowLeft,
   Bold01,
   AlignCenter,
   AlignLeft,
@@ -19,23 +18,16 @@ import {
   ImagePlus,
   Italic01,
   LayoutGrid02,
-  LayoutLeft,
   Link01,
   LinkExternal01,
-  Laptop01,
   List,
-  Moon02,
   Pin02,
   ReverseLeft,
   ReverseRight,
-  SearchMd,
-  Sun,
-  Settings01,
   SlashCircle01,
   Strikethrough01,
   Trash03,
   Underline01,
-  XClose,
 } from "@untitledui/icons";
 import Highlight from "@tiptap/extension-highlight";
 import Image from "@tiptap/extension-image";
@@ -46,9 +38,9 @@ import SubscriptExtension from "@tiptap/extension-subscript";
 import SuperscriptExtension from "@tiptap/extension-superscript";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
-import { type DragEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, type DragEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Underline from "@tiptap/extension-underline";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TableKit } from "@tiptap/extension-table";
 import TurndownService from "turndown";
@@ -60,6 +52,13 @@ import { type EffectiveLanguage, type LanguagePreference, getLanguageOptions, re
 import { FolderKey, Note } from "./types";
 import lophosNotesNaming from "../assets/lophos-notes-naming.svg";
 import appIcon from "../assets/icon.png";
+import { NoteEditorPane } from "./components/editor/NoteEditorPane";
+import { SettingsPage } from "./components/settings/SettingsPage";
+import { SidebarPane } from "./components/sidebar/SidebarPane";
+
+const SearchModal = lazy(() => import("./components/modals/SearchModal").then((module) => ({ default: module.SearchModal })));
+const ClearDataModal = lazy(() => import("./components/modals/ClearDataModal").then((module) => ({ default: module.ClearDataModal })));
+const CreateFolderModal = lazy(() => import("./components/modals/CreateFolderModal").then((module) => ({ default: module.CreateFolderModal })));
 
 
 const fixedSections = [
@@ -100,6 +99,7 @@ const NOTE_CONTEXT_MENU_HEIGHT = 186;
 const FOLDER_CONTEXT_MENU_WIDTH = 148;
 const FOLDER_CONTEXT_MENU_HEIGHT = 138;
 const MODAL_EXIT_DURATION_MS = 180;
+const AUTOSAVE_DELAY_MS = 350;
 
 type CustomFolder = {
   key: FolderKey;
@@ -142,6 +142,11 @@ type AppExportData = {
   uiState: UiState;
 };
 
+type NotesStorageInfo = {
+  filePath: string;
+  directoryPath: string;
+};
+
 const themeOptions: Array<{ value: AppTheme; label: string; swatches: [string, string, string] }> = [
   { value: "blue-lagoon", label: "Blue Lagoon", swatches: ["#2563eb", "#60a5fa", "#bfdbfe"] },
   { value: "green-forest", label: "Green Forest", swatches: ["#2f6f4f", "#4aa46f", "#cfead8"] },
@@ -150,14 +155,6 @@ const themeOptions: Array<{ value: AppTheme; label: string; swatches: [string, s
   { value: "catpuccin", label: "Catppuccino", swatches: ["#8b6b5c", "#c4a484", "#ead8c8"] },
   { value: "purple-haze", label: "Purple Haze", swatches: ["#7c3aed", "#a78bfa", "#ddd6fe"] }
 ];
-
-const highlightColors = [
-  { key: "highlightYellow", value: "#fff2a8" },
-  { key: "highlightGreen", value: "#d7f8d1" },
-  { key: "highlightBlue", value: "#dbeafe" },
-  { key: "highlightPink", value: "#ffe0ef" },
-  { key: "highlightPurple", value: "#eadcff" }
-] as const;
 
 function defaultToolbarVisibility(): ToolbarVisibilityPreferences {
   return {
@@ -180,6 +177,7 @@ function defaultToolbarVisibility(): ToolbarVisibilityPreferences {
     image: true
   };
 }
+
 function toolbarVisibilityFromPartial(parsed?: Partial<ToolbarVisibilityPreferences>): ToolbarVisibilityPreferences {
   const defaults = defaultToolbarVisibility();
   return {
@@ -190,8 +188,8 @@ function toolbarVisibilityFromPartial(parsed?: Partial<ToolbarVisibilityPreferen
     italic: parsed?.italic ?? defaults.italic,
     strikethrough: parsed?.strikethrough ?? defaults.strikethrough,
     code: parsed?.code ?? defaults.code,
-      lists: parsed?.lists ?? defaults.lists,
-      tables: parsed?.tables ?? defaults.tables,
+    lists: parsed?.lists ?? defaults.lists,
+    tables: parsed?.tables ?? defaults.tables,
     underline: parsed?.underline ?? defaults.underline,
     highlight: parsed?.highlight ?? defaults.highlight,
     links: parsed?.links ?? defaults.links,
@@ -217,100 +215,17 @@ function formatCreatedAtLabel(createdAt: string, locale: EffectiveLanguage) {
   return capitalizedMonth + " " + day + ", " + year;
 }
 
-function createNote(sortOrder: number, locale: EffectiveLanguage): Note {
-  const createdAt = new Date().toISOString();
-  const t = translations[locale];
+function defaultFolderSettings(): FolderSettings {
+  return { labels: {}, customFolders: [], hiddenFixedFolders: [] };
+}
 
+function defaultAppPreferences(): AppPreferences {
   return {
-    id: crypto.randomUUID(),
-    title: t.newNoteTitle,
-    preview: t.newNotePreview,
-    body: "",
-    folder: "all",
-    tags: ["draft"],
-    color: "#2fd582",
-    createdAt,
-    updatedAt: createdAt,
-    sortOrder,
-    checklist: []
+    language: "system",
+    appearance: "system",
+    theme: "blue-lagoon",
+    toolbarVisibility: defaultToolbarVisibility()
   };
-}
-
-function PinFilledIcon() {
-
-
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M13.1028 3.64642C13.4147 2.91872 13.5706 2.55487 13.8226 2.38959C14.0429 2.24506 14.3114 2.19335 14.5697 2.24571C14.865 2.30558 15.145 2.58549 15.7048 3.14532L20.8479 8.28846C21.4077 8.84828 21.6877 9.12819 21.7475 9.42354C21.7999 9.68181 21.7482 9.95031 21.6037 10.1707C21.4384 10.4227 21.0745 10.5786 20.3468 10.8905L17.8525 11.9595C17.7466 12.0048 17.6937 12.0275 17.6441 12.0558C17.6001 12.081 17.558 12.1095 17.5182 12.1411C17.4735 12.1766 17.4328 12.2173 17.3514 12.2987L15.7905 13.8596C15.6632 13.9869 15.5995 14.0506 15.5489 14.1231C15.504 14.1875 15.4668 14.257 15.4382 14.33C15.4059 14.4124 15.3882 14.5006 15.3529 14.6772L14.62 18.3417C14.4296 19.294 14.3343 19.7701 14.0833 19.9929C13.8646 20.1869 13.5719 20.2756 13.2823 20.2354C12.9498 20.1893 12.6064 19.846 11.9197 19.1593L4.83399 12.0735C4.14728 11.3868 3.80392 11.0434 3.75783 10.711C3.71768 10.4214 3.80629 10.1287 4.00036 9.90996C4.22312 9.6589 4.69927 9.56367 5.65158 9.37321L9.31604 8.64032C9.49261 8.60501 9.58089 8.58735 9.66321 8.55506C9.73629 8.5264 9.80573 8.48923 9.87011 8.44433C9.94264 8.39375 10.0063 8.33009 10.1336 8.20276L11.6945 6.64188C11.7759 6.56047 11.8166 6.51977 11.8522 6.47503C11.8837 6.43528 11.9122 6.39319 11.9374 6.34911C11.9657 6.2995 11.9884 6.24659 12.0338 6.14078L13.1028 3.64642Z" fill="currentColor"/>
-      <path d="M8.37682 15.6164L2.71997 21.2732M11.6945 6.64188L10.1336 8.20276C10.0063 8.33009 9.94264 8.39375 9.87011 8.44433C9.80573 8.48923 9.73629 8.5264 9.66321 8.55506C9.58089 8.58735 9.49261 8.60501 9.31604 8.64032L5.65158 9.37321C4.69927 9.56367 4.22312 9.6589 4.00036 9.90996C3.80629 10.1287 3.71768 10.4214 3.75783 10.711C3.80392 11.0434 4.14728 11.3868 4.83399 12.0735L11.9197 19.1593C12.6064 19.846 12.9498 20.1893 13.2823 20.2354C13.5719 20.2756 13.8646 20.1869 14.0833 19.9929C14.3343 19.7701 14.4296 19.294 14.62 18.3417L15.3529 14.6772C15.3882 14.5006 15.4059 14.4124 15.4382 14.33C15.4668 14.257 15.504 14.1875 15.5489 14.1231C15.5995 14.0506 15.6632 13.9869 15.7905 13.8596L17.3514 12.2987C17.4328 12.2173 17.4735 12.1766 17.5182 12.1411C17.558 12.1095 17.6001 12.081 17.6441 12.0558C17.6937 12.0275 17.7466 12.0048 17.8525 11.9595L20.3468 10.8905C21.0745 10.5786 21.4384 10.4227 21.6037 10.1707C21.7482 9.95031 21.7999 9.68181 21.7475 9.42354C21.6877 9.12819 21.4077 8.84828 20.8479 8.28846L15.7048 3.14532C15.145 2.58549 14.865 2.30558 14.5697 2.24571C14.3114 2.19335 14.0429 2.24506 13.8226 2.38959C13.5706 2.55487 13.4147 2.91872 13.1028 3.64642L12.0338 6.14078C11.9884 6.24659 11.9657 6.2995 11.9374 6.34911C11.9122 6.39319 11.8837 6.43528 11.8522 6.47503C11.8166 6.51977 11.7759 6.56047 11.6945 6.64188Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function NumberedListIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M21 12L9 12M21 6L9 6M21 18L9 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5 10V5L3 6.66667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 15.6667C3 15.2246 3.15804 14.8007 3.43934 14.4882C3.72064 14.1756 4.10218 14 4.5 14C4.89782 14 5.27936 14.1756 5.56066 14.4882C5.84196 14.8007 6 15.2246 6 15.6667C6 16.1592 5.625 16.5 5.25 16.9167L3 19H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function HighlightIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <g clipPath="url(#highlight-icon-clip)">
-        <path d="M23.7806 9.96936C23.711 9.89961 23.6283 9.8443 23.5372 9.80661C23.4461 9.76883 23.3485 9.74942 23.25 9.74942C23.1515 9.74942 23.0539 9.76883 22.9628 9.80661C22.8717 9.8443 22.789 9.89961 22.7194 9.96936L18 14.6897L10.2806 6.96936L10.0603 6.74999L14.7806 2.03062C14.8503 1.96093 14.9056 1.87821 14.9433 1.78716C14.981 1.69612 15.0005 1.59853 15.0005 1.49999C15.0005 1.40144 14.981 1.30386 14.9433 1.21282C14.9056 1.12177 14.8503 1.03904 14.7806 0.969369C14.711 0.899682 14.6282 0.844406 14.5371 0.806695C14.4461 0.768983 14.3485 0.749573 14.25 0.749573C14.1515 0.749573 14.0539 0.768983 13.9628 0.806695C13.8718 0.844406 13.789 0.899682 13.7194 0.969369L8.99999 5.68968C8.77306 5.91665 8.62492 6.21043 8.57733 6.52784C8.52974 6.84526 8.58522 7.16957 8.73562 7.45312L6.74999 9.43967C6.4689 9.72092 6.31101 10.1023 6.31101 10.5C6.31101 10.8977 6.4689 11.279 6.74999 11.5603L7.18968 12L1.71937 17.4694C1.6289 17.5597 1.56305 17.6719 1.52808 17.7949C1.49311 17.9179 1.4902 18.0478 1.5196 18.1723C1.549 18.2968 1.60975 18.4116 1.69608 18.506C1.78241 18.6005 1.89144 18.6711 2.0128 18.7115L8.76281 20.9615C8.83924 20.9872 8.91937 21.0002 8.99999 21C9.09851 21.0001 9.19609 20.9808 9.28713 20.9431C9.37818 20.9055 9.46096 20.8503 9.53062 20.7806L12.75 17.5603L13.1897 18C13.4709 18.281 13.8523 18.439 14.25 18.439C14.6477 18.439 15.0291 18.281 15.3103 18L17.2959 16.0144C17.5796 16.165 17.9041 16.2206 18.2217 16.173C18.5393 16.1255 18.8332 15.9771 19.0603 15.75L23.7806 11.0306C23.8504 10.961 23.9057 10.8783 23.9435 10.7872C23.9812 10.6961 24.0006 10.5985 24.0006 10.5C24.0006 10.4015 23.9812 10.3039 23.9435 10.2128C23.9057 10.1217 23.8504 10.039 23.7806 9.96936ZM8.79749 19.3922L3.64124 17.6719L8.24999 13.0603L11.6897 16.5L8.79749 19.3922ZM14.25 16.9397L13.2806 15.9694L8.78062 11.4694L7.81031 10.5L9.74999 8.56031L16.1897 15L14.25 16.9397Z" fill="currentColor" stroke="currentColor" strokeWidth="0.65" />
-      </g>
-      <defs>
-        <clipPath id="highlight-icon-clip">
-          <rect width="24" height="24" fill="white" />
-        </clipPath>
-      </defs>
-    </svg>
-  );
-}
-function SeparatorIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M3.01 12H21.01H21M7.5 12H7.51M16.5 12H16.51M12 12H12.01M21 21V20.2C21 19.0799 21 18.5198 20.782 18.092C20.5903 17.7157 20.2843 17.4097 19.908 17.218C19.4802 17 18.9201 17 17.8 17H6.2C5.0799 17 4.51984 17 4.09202 17.218C3.7157 17.4097 3.40973 17.7157 3.21799 18.092C3 18.5198 3 19.0799 3 20.2V21M21 3V3.8C21 4.9201 21 5.48016 20.782 5.90798C20.5903 6.28431 20.2843 6.59027 19.908 6.78201C19.4802 7 18.9201 7 17.8 7H6.2C5.0799 7 4.51984 7 4.09202 6.78201C3.71569 6.59027 3.40973 6.28431 3.21799 5.90798C3 5.48016 3 4.92011 3 3.8V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function BlockquoteIcon() {
-  return (
-    <svg width="19" height="19" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="currentColor" d="m6.2 18 2.35 -4.05c-0.08335 0.01665 -0.175 0.02915 -0.275 0.0375 -0.1 0.00835 -0.19165 0.0125 -0.275 0.0125 -1.1 0 -2.04165 -0.39165 -2.825 -1.175C4.391665 12.04165 4 11.1 4 10s0.391665 -2.04165 1.175 -2.825C5.95835 6.39165 6.9 6 8 6s2.04165 0.39165 2.825 1.175S12 8.9 12 10c0 0.35 -0.04585 0.69315 -0.1375 1.0295 -0.09165 0.3365 -0.22915 0.66 -0.4125 0.9705L8 18h-1.8Zm9 0 2.35 -4.05c-0.08335 0.01665 -0.175 0.02915 -0.275 0.0375 -0.1 0.00835 -0.19165 0.0125 -0.275 0.0125 -1.1 0 -2.04165 -0.39165 -2.825 -1.175S13 11.1 13 10s0.39165 -2.04165 1.175 -2.825S15.9 6 17 6s2.04165 0.39165 2.825 1.175S21 8.9 21 10c0 0.35 -0.04585 0.69315 -0.1375 1.0295 -0.09165 0.3365 -0.22915 0.66 -0.4125 0.9705L17 18h-1.8ZM7.994 12c0.554 0 1.02685 -0.19385 1.4185 -0.5815 0.39165 -0.38785 0.5875 -0.85865 0.5875 -1.4125 0 -0.554 -0.19385 -1.02685 -0.5815 -1.4185 -0.38785 -0.39165 -0.85865 -0.5875 -1.4125 -0.5875 -0.554 0 -1.02685 0.19385 -1.4185 0.5815 -0.39165 0.38785 -0.5875 0.85865 -0.5875 1.4125 0 0.554 0.19385 1.02685 0.5815 1.4185 0.38785 0.39165 0.85865 0.5875 1.4125 0.5875Zm9 0c0.554 0 1.02685 -0.19385 1.4185 -0.5815 0.39165 -0.38785 0.5875 -0.85865 0.5875 -1.4125 0 -0.554 -0.19385 -1.02685 -0.5815 -1.4185 -0.38785 -0.39165 -0.85865 -0.5875 -1.4125 -0.5875 -0.554 0 -1.02685 0.19385 -1.4185 0.5815 -0.39165 0.38785 -0.5875 0.85865 -0.5875 1.4125 0 0.554 0.19385 1.02685 0.5815 1.4185 0.38785 0.39165 0.85865 0.5875 1.4125 0.5875Z" />
-    </svg>
-  );
-}
-
-
-function SuperscriptIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M14 7L4 17M4 7L14 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M18 5.66667C18 5.22464 18.158 4.80072 18.4393 4.48816C18.7206 4.17559 19.1022 4 19.5 4C19.8978 4 20.2794 4.17559 20.5607 4.48816C20.842 4.80072 21 5.22464 21 5.66667C21 6.15917 20.625 6.5 20.25 6.91667L18 9H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SubscriptIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M14 7L4 17M4 7L14 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M18 15.6667C18 15.2246 18.158 14.8007 18.4393 14.4882C18.7206 14.1756 19.1022 14 19.5 14C19.8978 14 20.2794 14.1756 20.5607 14.4882C20.842 14.8007 21 15.2246 21 15.6667C21 16.1592 20.625 16.5 20.25 16.9167L18 19H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function noteMatchesFolder(note: Note, folder: FolderKey) {
-  if (folder === "all") {
-    return true;
-  }
-
-  return note.folder === folder;
 }
 
 function defaultExpandedSections() {
@@ -355,6 +270,144 @@ function sortNotes(notes: Note[]) {
 
     return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
   });
+}
+
+function areNotesEqual(left: Note | null | undefined, right: Note | null | undefined) {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.id === right.id &&
+    left.title === right.title &&
+    left.preview === right.preview &&
+    left.body === right.body &&
+    left.folder === right.folder &&
+    left.pinned === right.pinned &&
+    left.sortOrder === right.sortOrder &&
+    left.color === right.color &&
+    left.createdAt === right.createdAt &&
+    left.updatedAt === right.updatedAt &&
+    left.tags.length === right.tags.length &&
+    left.tags.every((tag, index) => tag === right.tags[index]) &&
+    left.checklist.length === right.checklist.length &&
+    left.checklist.every(
+      (item, index) =>
+        item.id === right.checklist[index]?.id &&
+        item.label === right.checklist[index]?.label &&
+        item.done === right.checklist[index]?.done
+    )
+  );
+}
+
+function mergeNoteIntoCollection(notes: Note[], draftNote: Note | null) {
+  if (!draftNote) {
+    return notes;
+  }
+
+  let hasChanges = false;
+  const nextNotes = notes.map((note) => {
+    if (note.id !== draftNote.id) {
+      return note;
+    }
+
+    if (areNotesEqual(note, draftNote)) {
+      return note;
+    }
+
+    hasChanges = true;
+    return draftNote;
+  });
+
+  return hasChanges ? nextNotes : notes;
+}
+
+function applyNoteDraftPatch(note: Note, patch: Partial<Note>, fallbackPreview: string) {
+  const nextTitle = patch.title ?? note.title;
+  const nextBody = patch.body ?? note.body;
+  const nextPreview = patch.preview ?? (patch.body !== undefined
+    ? nextBody.split("\n").find(Boolean)?.trim() || nextTitle.trim() || fallbackPreview
+    : note.preview || nextTitle.trim() || fallbackPreview);
+
+  return {
+    ...note,
+    ...patch,
+    title: nextTitle,
+    body: nextBody,
+    preview: nextPreview,
+    updatedAt: patch.updatedAt ?? new Date().toISOString()
+  };
+}
+
+function createNote(sortOrder: number, locale: EffectiveLanguage): Note {
+  const createdAt = new Date().toISOString();
+  const t = translations[locale];
+
+  return {
+    id: crypto.randomUUID(),
+    title: t.newNoteTitle,
+    preview: t.newNotePreview,
+    body: "",
+    folder: "all",
+    tags: ["draft"],
+    color: "#2fd582",
+    createdAt,
+    updatedAt: createdAt,
+    sortOrder,
+    checklist: []
+  };
+}
+
+function BlockquoteIcon() {
+  return (
+    <svg width="19" height="19" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="m6.2 18 2.35 -4.05c-0.08335 0.01665 -0.175 0.02915 -0.275 0.0375 -0.1 0.00835 -0.19165 0.0125 -0.275 0.0125 -1.1 0 -2.04165 -0.39165 -2.825 -1.175C4.391665 12.04165 4 11.1 4 10s0.391665 -2.04165 1.175 -2.825C5.95835 6.39165 6.9 6 8 6s2.04165 0.39165 2.825 1.175S12 8.9 12 10c0 0.35 -0.04585 0.69315 -0.1375 1.0295 -0.09165 0.3365 -0.22915 0.66 -0.4125 0.9705L8 18h-1.8Zm9 0 2.35 -4.05c-0.08335 0.01665 -0.175 0.02915 -0.275 0.0375 -0.1 0.00835 -0.19165 0.0125 -0.275 0.0125 -1.1 0 -2.04165 -0.39165 -2.825 -1.175S13 11.1 13 10s0.39165 -2.04165 1.175 -2.825S15.9 6 17 6s2.04165 0.39165 2.825 1.175S21 8.9 21 10c0 0.35 -0.04585 0.69315 -0.1375 1.0295 -0.09165 0.3365 -0.22915 0.66 -0.4125 0.9705L17 18h-1.8ZM7.994 12c0.554 0 1.02685 -0.19385 1.4185 -0.5815 0.39165 -0.38785 0.5875 -0.85865 0.5875 -1.4125 0 -0.554 -0.19385 -1.02685 -0.5815 -1.4185 -0.38785 -0.39165 -0.85865 -0.5875 -1.4125 -0.5875 -0.554 0 -1.02685 0.19385 -1.4185 0.5815 -0.39165 0.38785 -0.5875 0.85865 -0.5875 1.4125 0 0.554 0.19385 1.02685 0.5815 1.4185 0.38785 0.39165 0.85865 0.5875 1.4125 0.5875Zm9 0c0.554 0 1.02685 -0.19385 1.4185 -0.5815 0.39165 -0.38785 0.5875 -0.85865 0.5875 -1.4125 0 -0.554 -0.19385 -1.02685 -0.5815 -1.4185 -0.38785 -0.39165 -0.85865 -0.5875 -1.4125 -0.5875 -0.554 0 -1.02685 0.19385 -1.4185 0.5815 -0.39165 0.38785 -0.5875 0.85865 -0.5875 1.4125 0 0.554 0.19385 1.02685 0.5815 1.4185 0.38785 0.39165 0.85865 0.5875 1.4125 0.5875Z" />
+    </svg>
+  );
+}
+
+function HighlightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <g clipPath="url(#highlight-icon-clip-app)">
+        <path d="M23.7806 9.96936C23.711 9.89961 23.6283 9.8443 23.5372 9.80661C23.4461 9.76883 23.3485 9.74942 23.25 9.74942C23.1515 9.74942 23.0539 9.76883 22.9628 9.80661C22.8717 9.8443 22.789 9.89961 22.7194 9.96936L18 14.6897L10.2806 6.96936L10.0603 6.74999L14.7806 2.03062C14.8503 1.96093 14.9056 1.87821 14.9433 1.78716C14.981 1.69612 15.0005 1.59853 15.0005 1.49999C15.0005 1.40144 14.981 1.30386 14.9433 1.21282C14.9056 1.12177 14.8503 1.03904 14.7806 0.969369C14.711 0.899682 14.6282 0.844406 14.5371 0.806695C14.4461 0.768983 14.3485 0.749573 14.25 0.749573C14.1515 0.749573 14.0539 0.768983 13.9628 0.806695C13.8718 0.844406 13.789 0.899682 13.7194 0.969369L8.99999 5.68968C8.77306 5.91665 8.62492 6.21043 8.57733 6.52784C8.52974 6.84526 8.58522 7.16957 8.73562 7.45312L6.74999 9.43967C6.4689 9.72092 6.31101 10.1023 6.31101 10.5C6.31101 10.8977 6.4689 11.279 6.74999 11.5603L7.18968 12L1.71937 17.4694C1.6289 17.5597 1.56305 17.6719 1.52808 17.7949C1.49311 17.9179 1.4902 18.0478 1.5196 18.1723C1.549 18.2968 1.60975 18.4116 1.69608 18.506C1.78241 18.6005 1.89144 18.6711 2.0128 18.7115L8.76281 20.9615C8.83924 20.9872 8.91937 21.0002 8.99999 21C9.09851 21.0001 9.19609 20.9808 9.28713 20.9431C9.37818 20.9055 9.46096 20.8503 9.53062 20.7806L12.75 17.5603L13.1897 18C13.4709 18.281 13.8523 18.439 14.25 18.439C14.6477 18.439 15.0291 18.281 15.3103 18L17.2959 16.0144C17.5796 16.165 17.9041 16.2206 18.2217 16.173C18.5393 16.1255 18.8332 15.9771 19.0603 15.75L23.7806 11.0306C23.8504 10.961 23.9057 10.8783 23.9435 10.7872C23.9812 10.6961 24.0006 10.5985 24.0006 10.5C24.0006 10.4015 23.9812 10.3039 23.9435 10.2128C23.9057 10.1217 23.8504 10.039 23.7806 9.96936ZM8.79749 19.3922L3.64124 17.6719L8.24999 13.0603L11.6897 16.5L8.79749 19.3922ZM14.25 16.9397L13.2806 15.9694L8.78062 11.4694L7.81031 10.5L9.74999 8.56031L16.1897 15L14.25 16.9397Z" fill="currentColor" stroke="currentColor" strokeWidth="0.65" />
+      </g>
+      <defs><clipPath id="highlight-icon-clip-app"><rect width="24" height="24" fill="white" /></clipPath></defs>
+    </svg>
+  );
+}
+
+function SeparatorIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3.01 12H21.01H21M7.5 12H7.51M16.5 12H16.51M12 12H12.01M21 21V20.2C21 19.0799 21 18.5198 20.782 18.092C20.5903 17.7157 20.2843 17.4097 19.908 17.218C19.4802 17 18.9201 17 17.8 17H6.2C5.0799 17 4.51984 17 4.09202 17.218C3.7157 17.4097 3.40973 17.7157 3.21799 18.092C3 18.5198 3 19.0799 3 20.2V21M21 3V3.8C21 4.9201 21 5.48016 20.782 5.90798C20.5903 6.28431 20.2843 6.59027 19.908 6.78201C19.4802 7 18.9201 7 17.8 7H6.2C5.0799 7 4.51984 7 4.09202 6.78201C3.71569 6.59027 3.40973 6.28431 3.21799 5.90798C3 5.48016 3 4.92011 3 3.8V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function SuperscriptIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M14 7L4 17M4 7L14 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18 5.66667C18 5.22464 18.158 4.80072 18.4393 4.48816C18.7206 4.17559 19.1022 4 19.5 4C19.8978 4 20.2794 4.17559 20.5607 4.48816C20.842 4.80072 21 5.22464 21 5.66667C21 6.15917 20.625 6.5 20.25 6.91667L18 9H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function SubscriptIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M14 7L4 17M4 7L14 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18 15.6667C18 15.2246 18.158 14.8007 18.4393 14.4882C18.7206 14.1756 19.1022 14 19.5 14C19.8978 14 20.2794 14.1756 20.5607 14.4882C20.842 14.8007 21 15.2246 21 15.6667C21 16.1592 20.625 16.5 20.25 16.9167L18 19H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function getContextMenuPosition(x: number, y: number, width: number, height: number) {
+  return {
+    x: Math.min(Math.max(CONTEXT_MENU_VIEWPORT_GAP, x), window.innerWidth - width - CONTEXT_MENU_VIEWPORT_GAP),
+    y: Math.min(Math.max(CONTEXT_MENU_VIEWPORT_GAP, y), window.innerHeight - height - CONTEXT_MENU_VIEWPORT_GAP)
+  };
 }
 
 const legacySeedNoteIds = new Set(["welcome", "roadmap", "ideas", "journal"]);
@@ -453,18 +506,6 @@ function appPreferencesFromLocalStorage(): AppPreferences {
   }
 }
 
-function defaultFolderSettings(): FolderSettings {
-  return { labels: {}, customFolders: [], hiddenFixedFolders: [] };
-}
-
-function defaultAppPreferences(): AppPreferences {
-  return {
-    language: "system",
-    appearance: "system",
-    theme: "blue-lagoon",
-    toolbarVisibility: defaultToolbarVisibility()
-  };
-}
 
 function folderSettingsFromLocalStorage(): FolderSettings {
   const raw = window.localStorage.getItem(folderSettingsKey);
@@ -773,43 +814,6 @@ function noteBodyToEditorContent(body: string) {
     .join("");
 }
 
-function isEditorActive(editor: Editor | null, name: string, attributes?: Record<string, unknown>) {
-  return editor?.isActive(name, attributes) ? "active" : "";
-}
-
-function getContextMenuPosition(x: number, y: number, width: number, height: number) {
-  const maxX = window.innerWidth - width - CONTEXT_MENU_VIEWPORT_GAP;
-  const maxY = window.innerHeight - height - CONTEXT_MENU_VIEWPORT_GAP;
-
-  return {
-    x: Math.max(CONTEXT_MENU_VIEWPORT_GAP, Math.min(x, maxX)),
-    y: Math.max(CONTEXT_MENU_VIEWPORT_GAP, Math.min(y, maxY))
-  };
-}
-
-function currentBlockType(editor: Editor | null) {
-  if (!editor) {
-    return "paragraph";
-  }
-
-  if (editor.isActive("heading", { level: 1 })) {
-    return "heading-1";
-  }
-
-  if (editor.isActive("heading", { level: 2 })) {
-    return "heading-2";
-  }
-
-  if (editor.isActive("heading", { level: 3 })) {
-    return "heading-3";
-  }
-
-  if (editor.isActive("heading", { level: 4 })) {
-    return "heading-4";
-  }
-
-  return "paragraph";
-}
 
 export default function App() {
   const initialAppPreferences = appPreferencesFromLocalStorage();
@@ -823,7 +827,6 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialUiState.sidebarCollapsed);
   const [toolbarMenu, setToolbarMenu] = useState<ToolbarMenu>(null);
   const [linkInput, setLinkInput] = useState("");
-  const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const [folderSettings, setFolderSettings] = useState<FolderSettings>(() => folderSettingsFromLocalStorage());
   const [appPreferences, setAppPreferences] = useState<AppPreferences>(initialAppPreferences);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(initialUiState.expandedSections);
@@ -857,12 +860,18 @@ export default function App() {
   const [noteActionsMenuPosition, setNoteActionsMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
+  const notesRef = useRef(notes);
   const [sidebarScrolled, setSidebarScrolled] = useState(false);
   const [notesStorageInfo, setNotesStorageInfo] = useState<NotesStorageInfo | null>(null);
   const [isNotesStorageLoading, setIsNotesStorageLoading] = useState(Boolean(window.lumina?.notes?.getStorageInfo));
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const [appVersion, setAppVersion] = useState("0.1.0");
+  const [activeNoteDraft, setActiveNoteDraft] = useState<Note | null>(notes[0] ?? null);
+  const [isActiveNoteDirty, setIsActiveNoteDirty] = useState(false);
   const selectedNoteRef = useRef<Note | undefined>(undefined);
+  const draftNoteRef = useRef<Note | null>(notes[0] ?? null);
+  const dirtyDraftRef = useRef(false);
+  const previousSelectedIdRef = useRef(selectedId);
   const resolvedAppearance = appPreferences.appearance === "system" ? (systemPrefersDark ? "dark" : "light") : appPreferences.appearance;
   const resolvedLanguage = resolveLanguage(appPreferences.language, window.navigator.language);
   const selectedTheme = themeOptions.find((option) => option.value === appPreferences.theme) ?? themeOptions[0];
@@ -1048,19 +1057,6 @@ export default function App() {
     setNotes((current) => normalizeDefaultNotes(current, resolvedLanguage));
   }, [resolvedLanguage]);
 
-  useEffect(() => {
-    if (!storageReady) {
-      return;
-    }
-
-    window.localStorage.setItem(storageKey, JSON.stringify(notes));
-
-    if (window.lumina?.notes) {
-      void window.lumina.notes.save(notes).catch((error) => {
-        console.error("Could not save local notes", error);
-      });
-    }
-  }, [notes, storageReady]);
 
   useEffect(() => {
     window.localStorage.setItem(folderSettingsKey, JSON.stringify(folderSettings));
@@ -1094,28 +1090,51 @@ export default function App() {
     });
   }, [folderSettings.customFolders]);
 
-  const filteredNotes = useMemo(() => {
-    return sortNotes(
-      notes.filter((note) => {
-        const matchesFolder = noteMatchesFolder(note, activeFolder);
-        return matchesFolder;
-      })
-    );
-  }, [activeFolder, notes]);
+  const sortedNotes = useMemo(() => sortNotes(notes), [notes]);
 
-  const searchResults = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const orderedNotes = sortNotes(notes);
+  const notesByFolder = useMemo(() => {
+    const groupedNotes = new Map<FolderKey, Note[]>();
+    groupedNotes.set("all", sortedNotes);
 
-    if (!query) {
-      return orderedNotes;
+    for (const note of sortedNotes) {
+      const bucket = groupedNotes.get(note.folder);
+      if (bucket) {
+        bucket.push(note);
+      } else {
+        groupedNotes.set(note.folder, [note]);
+      }
     }
 
-    return orderedNotes.filter((note) => {
-      const haystack = [note.title, note.preview, noteBodyToPlainText(note.body), folderLabel(note.folder)].join(" ").toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [notes, searchQuery, folderSettings]);
+    return groupedNotes;
+  }, [sortedNotes]);
+
+  const filteredNotes = useMemo(() => {
+    return activeFolder === "all" ? sortedNotes : notesByFolder.get(activeFolder) ?? [];
+  }, [activeFolder, notesByFolder, sortedNotes]);
+
+  const searchIndex = useMemo(() => {
+    if (!isSearchModalOpen) {
+      return [];
+    }
+
+    return sortedNotes.map((note) => ({
+      note,
+      haystack: [note.title, note.preview, noteBodyToPlainText(note.body), folderLabel(note.folder)].join(" ").toLowerCase()
+    }));
+  }, [folderSettings, isSearchModalOpen, sortedNotes, t.fixedFolderAllNotes, t.fixedFolderGetStarted]);
+
+  const searchResults = useMemo(() => {
+    if (!isSearchModalOpen) {
+      return [];
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return sortedNotes;
+    }
+
+    return searchIndex.filter((entry) => entry.haystack.includes(query)).map((entry) => entry.note);
+  }, [isSearchModalOpen, searchIndex, searchQuery, sortedNotes]);
 
   const visibleSections = useMemo(() => {
     const getStarted = {
@@ -1134,8 +1153,47 @@ export default function App() {
     ];
   }, [folderSettings, t.fixedFolderAllNotes, t.fixedFolderGetStarted]);
 
-  const selectedNote = filteredNotes.find((note) => note.id === selectedId) ?? filteredNotes[0] ?? notes[0];
+  const selectedNoteSource = filteredNotes.find((note) => note.id === selectedId) ?? filteredNotes[0] ?? notes[0];
+  const currentDraftNote = isActiveNoteDirty && draftNoteRef.current?.id === selectedNoteSource?.id
+    ? draftNoteRef.current
+    : activeNoteDraft;
+  const selectedNote = isActiveNoteDirty && currentDraftNote && currentDraftNote.id === selectedNoteSource?.id ? currentDraftNote : selectedNoteSource;
   selectedNoteRef.current = selectedNote;
+  notesRef.current = notes;
+  draftNoteRef.current = currentDraftNote;
+  dirtyDraftRef.current = isActiveNoteDirty;
+
+  function getCurrentSelectedNote() {
+    if (dirtyDraftRef.current && draftNoteRef.current) {
+      return draftNoteRef.current;
+    }
+
+    return selectedNoteRef.current;
+  }
+
+  function persistNotes(nextNotes: Note[]) {
+    window.localStorage.setItem(storageKey, JSON.stringify(nextNotes));
+
+    if (window.lumina?.notes) {
+      void window.lumina.notes.save(nextNotes).catch((error) => {
+        console.error("Could not save local notes", error);
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      persistNotes(notes);
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [notes, storageReady]);
 
   const editor = useEditor({
     extensions: [
@@ -1190,6 +1248,8 @@ export default function App() {
       })
     ],
     content: "",
+    immediatelyRender: true,
+    shouldRerenderOnTransaction: false,
     editorProps: {
       attributes: {
         class: "tiptap-editor",
@@ -1197,32 +1257,72 @@ export default function App() {
       }
     },
     onUpdate: ({ editor: activeEditor }) => {
-      const activeNote = selectedNoteRef.current;
+      const activeNote = draftNoteRef.current?.id === selectedNoteRef.current?.id ? draftNoteRef.current : selectedNoteRef.current;
       if (!activeNote) {
         return;
       }
 
-      const body = activeEditor.getHTML();
-      const preview = activeEditor.getText().split("\n").find(Boolean)?.trim() || activeNote.title.trim() || t.emptyNote;
+      const nextDraft = applyNoteDraftPatch(activeNote, {
+        body: activeEditor.getHTML(),
+        preview: activeEditor.getText().split("\n").find(Boolean)?.trim() || activeNote.title.trim() || t.emptyNote
+      }, t.emptyNote);
 
-      setNotes((current) =>
-        current.map((note) =>
-          note.id === activeNote.id
-            ? {
-                ...note,
-                body,
-                preview,
-                updatedAt: new Date().toISOString()
-              }
-            : note
-        )
-      );
+      draftNoteRef.current = nextDraft;
+      selectedNoteRef.current = nextDraft;
+      setIsActiveNoteDirty(true);
     }
   }, [selectedNote?.id, resolvedLanguage]);
 
-  const currentHeadingAttributes = editor?.getAttributes("heading") as { textAlign?: string } | undefined;
-  const currentParagraphAttributes = editor?.getAttributes("paragraph") as { textAlign?: string } | undefined;
-  const currentTextAlign = (currentHeadingAttributes?.textAlign ?? currentParagraphAttributes?.textAlign ?? "left") as "left" | "center" | "right";
+  const editorUiState = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      if (!currentEditor) {
+        return {
+          canUndo: false,
+          canRedo: false,
+          currentTextAlign: "left" as "left" | "center" | "right",
+          isBlockquote: false,
+          isBulletList: false,
+          isOrderedList: false,
+          isTaskList: false,
+          isTable: false,
+          isBold: false,
+          isItalic: false,
+          isStrike: false,
+          isCode: false,
+          isUnderline: false,
+          isHighlight: false,
+          isLink: false,
+          isSuperscript: false,
+          isSubscript: false
+        };
+      }
+
+      const headingAttributes = currentEditor.getAttributes("heading") as { textAlign?: string } | undefined;
+      const paragraphAttributes = currentEditor.getAttributes("paragraph") as { textAlign?: string } | undefined;
+
+      return {
+        canUndo: currentEditor.can().undo(),
+        canRedo: currentEditor.can().redo(),
+        currentTextAlign: (headingAttributes?.textAlign ?? paragraphAttributes?.textAlign ?? "left") as "left" | "center" | "right",
+        isBlockquote: currentEditor.isActive("blockquote"),
+        isBulletList: currentEditor.isActive("bulletList"),
+        isOrderedList: currentEditor.isActive("orderedList"),
+        isTaskList: currentEditor.isActive("taskList"),
+        isTable: currentEditor.isActive("table"),
+        isBold: currentEditor.isActive("bold"),
+        isItalic: currentEditor.isActive("italic"),
+        isStrike: currentEditor.isActive("strike"),
+        isCode: currentEditor.isActive("code"),
+        isUnderline: currentEditor.isActive("underline"),
+        isHighlight: currentEditor.isActive("highlight"),
+        isLink: currentEditor.isActive("link"),
+        isSuperscript: currentEditor.isActive("superscript"),
+        isSubscript: currentEditor.isActive("subscript")
+      };
+    }
+  });
+  const currentTextAlign = editorUiState.currentTextAlign;
 
   useEffect(() => {
     if (selectedNote && selectedNote.id !== selectedId) {
@@ -1230,6 +1330,41 @@ export default function App() {
     }
   }, [selectedId, selectedNote]);
 
+  useEffect(() => {
+    const previousSelectedId = previousSelectedIdRef.current;
+    if (previousSelectedId !== selectedId && draftNoteRef.current?.id === previousSelectedId && dirtyDraftRef.current) {
+      setNotes((current) => mergeNoteIntoCollection(current, draftNoteRef.current));
+      setIsActiveNoteDirty(false);
+    }
+
+    previousSelectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedNoteSource) {
+      setActiveNoteDraft(null);
+      draftNoteRef.current = null;
+      selectedNoteRef.current = undefined;
+      dirtyDraftRef.current = false;
+      setIsActiveNoteDirty(false);
+      return;
+    }
+
+    if (activeNoteDraft?.id !== selectedNoteSource.id) {
+      setActiveNoteDraft(selectedNoteSource);
+      draftNoteRef.current = selectedNoteSource;
+      selectedNoteRef.current = selectedNoteSource;
+      dirtyDraftRef.current = false;
+      setIsActiveNoteDirty(false);
+      return;
+    }
+
+    if (!isActiveNoteDirty && !areNotesEqual(activeNoteDraft, selectedNoteSource)) {
+      setActiveNoteDraft(selectedNoteSource);
+      draftNoteRef.current = selectedNoteSource;
+      selectedNoteRef.current = selectedNoteSource;
+    }
+  }, [activeNoteDraft, isActiveNoteDirty, selectedNoteSource]);
 
   useEffect(() => {
     if (workspaceView !== "notes" || !selectedNote?.id) {
@@ -1308,8 +1443,6 @@ export default function App() {
     };
   }, [isSearchModalOpen]);
 
-
-
   useEffect(() => {
     if (!renamingFolderKey) {
       return;
@@ -1329,6 +1462,46 @@ export default function App() {
       window.cancelAnimationFrame(frame);
     };
   }, [renamingFolderKey]);
+
+  useEffect(() => {
+    if (!isActiveNoteDirty || !draftNoteRef.current) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const pendingDraft = draftNoteRef.current;
+      if (!pendingDraft) {
+        return;
+      }
+
+      setNotes((current) => mergeNoteIntoCollection(current, pendingDraft));
+      setActiveNoteDraft(pendingDraft);
+      dirtyDraftRef.current = false;
+      setIsActiveNoteDirty(false);
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isActiveNoteDirty, selectedId]);
+
+  useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
+    const flushPendingDraft = () => {
+      const pendingNotes = dirtyDraftRef.current ? mergeNoteIntoCollection(notesRef.current, draftNoteRef.current) : notesRef.current;
+      persistNotes(pendingNotes);
+    };
+
+    window.addEventListener("beforeunload", flushPendingDraft);
+
+    return () => {
+      window.removeEventListener("beforeunload", flushPendingDraft);
+      flushPendingDraft();
+    };
+  }, [storageReady]);
 
   useEffect(() => {
     if (!editor || !selectedNote) {
@@ -1363,25 +1536,6 @@ export default function App() {
     }
   }, [editor, selectedNote?.id, selectedNote?.body]);
 
-  useEffect(() => {
-    if (!editor) {
-      return;
-    }
-
-    function updateHistoryState() {
-      setHistoryState({
-        canUndo: editor.can().undo(),
-        canRedo: editor.can().redo()
-      });
-    }
-
-    updateHistoryState();
-    editor.on("transaction", updateHistoryState);
-
-    return () => {
-      editor.off("transaction", updateHistoryState);
-    };
-  }, [editor]);
   useEffect(() => {
     modalVisibilityRef.current = {
       search: isSearchModalOpen || closingModals.search,
@@ -1553,22 +1707,15 @@ export default function App() {
     closeCreateFolderModal();
   }
   function updateNote(patch: Partial<Note>) {
-    if (!selectedNote) {
+    if (!selectedNoteRef.current) {
       return;
     }
 
-    setNotes((current) =>
-      current.map((note) =>
-        note.id === selectedNote.id
-          ? {
-              ...note,
-              ...patch,
-              preview: (patch.body ?? note.body).split("\n").find(Boolean) || (patch.title ?? note.title).trim() || t.emptyNote,
-              updatedAt: new Date().toISOString()
-            }
-          : note
-      )
-    );
+    const nextDraft = applyNoteDraftPatch(selectedNoteRef.current, patch, t.emptyNote);
+    selectedNoteRef.current = nextDraft;
+    draftNoteRef.current = nextDraft;
+    setActiveNoteDraft(nextDraft);
+    setIsActiveNoteDirty(true);
   }
 
   function addNewNote() {
@@ -1706,7 +1853,6 @@ export default function App() {
       }
     }
   }
-
   async function chooseNotesStorageDirectory() {
     if (!window.lumina?.notes?.chooseStorageDirectory) {
       return;
@@ -1729,9 +1875,6 @@ export default function App() {
     }));
   }
 
-  function notesForSection(sectionKey: FolderKey) {
-    return sortNotes(notes.filter((note) => noteMatchesFolder(note, sectionKey)));
-  }
 
   function openNoteContextMenu(event: MouseEvent<HTMLButtonElement>, noteId: string, folderKey: FolderKey) {
     event.preventDefault();
@@ -1998,16 +2141,17 @@ export default function App() {
   }
 
   async function exportSelectedNoteAsMarkdown() {
-    if (!selectedNote) {
+    const note = getCurrentSelectedNote();
+    if (!note) {
       return;
     }
 
     setIsNoteActionsMenuOpen(false);
-    const markdown = ["# " + selectedNote.title, noteBodyToMarkdown(selectedNote.body)].filter(Boolean).join("\n\n");
+    const markdown = ["# " + note.title, noteBodyToMarkdown(note.body)].filter(Boolean).join("\n\n");
 
     try {
       if (window.lumina?.notes?.exportMarkdown) {
-        await window.lumina.notes.exportMarkdown(selectedNote.title, markdown);
+        await window.lumina.notes.exportMarkdown(note.title, markdown);
         return;
       }
     } catch (error) {
@@ -2018,7 +2162,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = selectedNote.title + ".md";
+    link.download = note.title + ".md";
     document.body.append(link);
     link.click();
     link.remove();
@@ -2026,7 +2170,8 @@ export default function App() {
   }
 
   async function exportSelectedNoteAsPdf() {
-    if (!selectedNote) {
+    const note = getCurrentSelectedNote();
+    if (!note) {
       return;
     }
 
@@ -2038,7 +2183,7 @@ export default function App() {
 
     try {
       if (window.lumina?.notes?.exportPdf) {
-        await window.lumina.notes.exportPdf(selectedNote.title, await noteBodyToPdfHtml(selectedNote.body));
+        await window.lumina.notes.exportPdf(note.title, await noteBodyToPdfHtml(note.body));
         return;
       }
     } catch (error) {
@@ -2307,201 +2452,56 @@ export default function App() {
       </div>
       <div className={["app-shell", sidebarCollapsed ? "collapsed" : "", workspaceView === "settings" ? "settings-mode" : ""].filter(Boolean).join(" ")}>
       {workspaceView !== "settings" ? (
-      <aside className={sidebarCollapsed ? "sidebar collapsed" : "sidebar"}>
-        <div className={sidebarCollapsed ? "sidebar-topbar collapsed" : "sidebar-topbar"}>
-          <button
-            ref={sidebarCollapseRef}
-            className="sidebar-collapse"
-            aria-label={sidebarCollapsed ? t.sidebarOpen : t.sidebarClose}
-            onMouseEnter={(event) => showSidebarTooltipFor(sidebarCollapsed ? t.sidebarOpen : t.sidebarClose, event.currentTarget)}
-            onMouseLeave={hideSidebarTooltip}
-            onFocus={(event) => showSidebarTooltipFor(sidebarCollapsed ? t.sidebarOpen : t.sidebarClose, event.currentTarget)}
-            onBlur={hideSidebarTooltip}
-            onClick={() => {
-              hideSidebarTooltip();
-              setSidebarCollapsed((current) => !current);
-            }}
-          >
-            <LayoutLeft size={18} />
-          </button>
-          <button className={sidebarCollapsed ? "sidebar-quick-action visible" : "sidebar-quick-action"} aria-label={t.sidebarNewNote} onMouseEnter={(event) => showSidebarTooltipFor(t.sidebarNewNote, event.currentTarget)} onMouseLeave={hideSidebarTooltip} onFocus={(event) => showSidebarTooltipFor(t.sidebarNewNote, event.currentTarget)} onBlur={hideSidebarTooltip} onClick={addNewNote}>
-            <Edit05 size={16} />
-          </button>
-        </div>
-
-        {!sidebarCollapsed ? (
-          <>
-            <div className="sidebar-main-menu">
-              <button className="sidebar-action" onClick={addNewNote}>
-                <Edit05 size={16} />
-                <span className="sidebar-item-label">{t.sidebarNewNote}</span>
-              </button>
-              <button className="sidebar-action" onClick={openCreateFolderModal}>
-                <Folder size={16} />
-                <span className="sidebar-item-label">{t.sidebarNewFolder}</span>
-              </button>
-              <button className="sidebar-action" onClick={openSearchModal}>
-                <SearchMd size={16} />
-                <span className="sidebar-item-label">{t.sidebarSearch}</span>
-              </button>
-            </div>
-
-            <div className="sidebar-divider" />
-
-            <SimpleBar
-              className={sidebarScrolled ? "sidebar-disclosure-scroll has-top-fade" : "sidebar-disclosure-scroll"}
-              autoHide={false}
-              scrollableNodeProps={{ onScroll: handleSidebarScroll }}
-            >
-              <div className="sidebar-disclosure-list">
-                {visibleSections.map((section) => {
-                  const sectionNotes = notesForSection(section.key as FolderKey);
-                  const expanded = expandedSections[section.key];
-
-                  return (
-                    <section
-                      key={section.key}
-                      className={dropTargetFolder === (section.key as FolderKey) ? "sidebar-section sidebar-section-drop-target" : "sidebar-section"}
-                      onDragOver={(event) => handleFolderDragOver(event, section.key as FolderKey)}
-                      onDrop={(event) => handleFolderDrop(event, section.key as FolderKey)}
-                    >
-                      {renamingFolderKey === (section.key as FolderKey) ? (
-                        <div
-                          className="sidebar-section-trigger renaming"
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
-                        >
-                          <span className="sidebar-section-title">
-                            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                            <input
-                              ref={renameInputRef}
-                              className="sidebar-section-input"
-                              value={renamingFolderLabel}
-                              onChange={(event) => setRenamingFolderLabel(event.target.value)}
-                              onBlur={cancelRenamingFolder}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  commitRenamingFolder(section.key as FolderKey);
-                                }
-
-                                if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  cancelRenamingFolder();
-                                }
-                              }}
-                              onPointerDown={(event) => event.stopPropagation()}
-                            />
-                          </span>
-                        </div>
-                      ) : (
-                        <button
-                          className="sidebar-section-trigger"
-                          onClick={() => {
-                            toggleSection(section.key);
-                          }}
-                          onContextMenu={(event) => {
-                            if (section.key === "all") {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              return;
-                            }
-
-                            openFolderContextMenu(event, section.key as FolderKey);
-                          }}
-                        >
-                          <span className="sidebar-section-title">
-                            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                            <span className="sidebar-section-label">{section.label}</span>
-                          </span>
-                        </button>
-                      )}
-
-                      {expanded ? (
-                        <div className="note-tree">
-                          {sectionNotes.map((note) => {
-                            if (renamingNoteId === note.id && renamingSectionKey === (section.key as FolderKey)) {
-                              return (
-                                <div
-                                  key={note.id}
-                                  className={selectedNote?.id === note.id ? "tree-note active renaming" : "tree-note renaming"}
-                                  onContextMenu={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                  }}
-                                >
-                                  <input
-                                    ref={renameInputRef}
-                                    className="tree-note-input"
-                                    value={renamingNoteTitle}
-                                    onChange={(event) => setRenamingNoteTitle(event.target.value)}
-                                    onBlur={() => commitRenamingNote(note.id)}
-                                    onKeyDown={(event) => {
-                                      if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        commitRenamingNote(note.id);
-                                      }
-
-                                      if (event.key === "Escape") {
-                                        event.preventDefault();
-                                        cancelRenamingNote();
-                                      }
-                                    }}
-                                    onPointerDown={(event) => event.stopPropagation()}
-                                  />
-                                  {note.pinned ? (
-                                    <span className="tree-note-pin" aria-label={t.pinnedNote}>
-                                      <PinFilledIcon />
-                                    </span>
-                                  ) : null}
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <button
-                                key={note.id}
-                                className={[
-                                  selectedNote?.id === note.id ? "tree-note active" : "tree-note",
-                                  draggedNoteId === note.id ? "dragging" : ""
-                                ].filter(Boolean).join(" ")}
-                                draggable={renamingNoteId !== note.id}
-                                onDragStart={(event) => handleNoteDragStart(event, note.id)}
-                                onDragEnd={clearNoteDrag}
-                                onClick={() => {
-                                  setWorkspaceView("notes");
-                                  setActiveFolder(section.key as FolderKey);
-                                  setSelectedId(note.id);
-                                }}
-                                onContextMenu={(event) => openNoteContextMenu(event, note.id, section.key as FolderKey)}
-                              >
-                                <span className="tree-note-label">{note.title}</span>
-                                {note.pinned ? (
-                                  <span className="tree-note-pin" aria-label={t.pinnedNote}>
-                                    <PinFilledIcon />
-                                  </span>
-                                ) : null}
-                              </button>
-                            );
-                          })}
-
-                        </div>
-                      ) : null}
-                    </section>
-                  );
-                })}
-              </div>
-            </SimpleBar>
-
-            <button className={workspaceView === "settings" ? "sidebar-settings active" : "sidebar-settings"} onClick={() => { setWorkspaceView("settings"); void refreshNotesStorageInfo(); }}>
-              <Settings01 size={16} />
-              <span className="sidebar-item-label">{t.sidebarSettings}</span>
-            </button>
-          </>
-        ) : null}
-      </aside>
+      <SidebarPane
+        sidebarCollapsed={sidebarCollapsed}
+        sidebarScrolled={sidebarScrolled}
+        t={t}
+        sidebarCollapseRef={sidebarCollapseRef}
+        renameInputRef={renameInputRef}
+        visibleSections={visibleSections}
+        notesByFolder={notesByFolder}
+        expandedSections={expandedSections}
+        selectedNoteId={selectedNote?.id}
+        renamingFolderKey={renamingFolderKey}
+        renamingFolderLabel={renamingFolderLabel}
+        renamingNoteId={renamingNoteId}
+        renamingSectionKey={renamingSectionKey}
+        renamingNoteTitle={renamingNoteTitle}
+        draggedNoteId={draggedNoteId}
+        dropTargetFolder={dropTargetFolder}
+        onShowSidebarTooltip={showSidebarTooltipFor}
+        onHideSidebarTooltip={hideSidebarTooltip}
+        onToggleSidebarCollapse={() => {
+          hideSidebarTooltip();
+          setSidebarCollapsed((current) => !current);
+        }}
+        onAddNewNote={addNewNote}
+        onOpenCreateFolderModal={openCreateFolderModal}
+        onOpenSearchModal={openSearchModal}
+        onToggleSection={toggleSection}
+        onOpenFolderContextMenu={openFolderContextMenu}
+        onSetRenamingFolderLabel={setRenamingFolderLabel}
+        onCommitRenamingFolder={commitRenamingFolder}
+        onCancelRenamingFolder={cancelRenamingFolder}
+        onHandleFolderDragOver={handleFolderDragOver}
+        onHandleFolderDrop={handleFolderDrop}
+        onSetRenamingNoteTitle={setRenamingNoteTitle}
+        onCommitRenamingNote={commitRenamingNote}
+        onCancelRenamingNote={cancelRenamingNote}
+        onHandleNoteDragStart={handleNoteDragStart}
+        onClearNoteDrag={clearNoteDrag}
+        onSelectNote={(noteId, folderKey) => {
+          setWorkspaceView("notes");
+          setActiveFolder(folderKey);
+          setSelectedId(noteId);
+        }}
+        onOpenNoteContextMenu={openNoteContextMenu}
+        onHandleSidebarScroll={handleSidebarScroll}
+        onOpenSettings={() => {
+          setWorkspaceView("settings");
+          void refreshNotesStorageInfo();
+        }}
+      />
       ) : null}
 
       <main className={workspaceView === "settings" ? "workspace settings-workspace" : "workspace"}>
@@ -2509,624 +2509,84 @@ export default function App() {
 
         <SimpleBar className="workspace-scroll" autoHide={false} scrollableNodeProps={{ ref: workspaceScrollRef }}>
           {workspaceView === "settings" ? (
-            <section className="settings-page">
-              <div className="settings-topbar">
-                <div className="settings-topbar-inner">
-                  <button type="button" className="settings-back-button" aria-label={t.settingsBack} onClick={() => setWorkspaceView("notes")}>
-                    <ArrowNarrowLeft size={16} />
-                  </button>
-                  <h1 className="settings-page-title">{t.settingsTitle}</h1>
-                </div>
-              </div>
-
-              <div className="settings-surface">
-                <div className="settings-panel">
-                <section className="settings-row">
-                  <div className="settings-row-copy">
-                    <h2>{t.settingsLanguageTitle}</h2>
-                    <p>{t.settingsLanguageDescription}</p>
-                  </div>
-                  <div className="settings-row-control">
-                    <div className="settings-select-shell" onPointerDown={(event) => event.stopPropagation()}>
-                      <button
-                        type="button"
-                        className={isLanguageMenuOpen ? "settings-select-trigger open" : "settings-select-trigger"}
-                        aria-haspopup="menu"
-                        aria-expanded={isLanguageMenuOpen}
-                        onClick={() => {
-                          const nextOpen = !isLanguageMenuOpen;
-                          closeFloatingMenus();
-                          setIsLanguageMenuOpen(nextOpen);
-                        }}
-                      >
-                        <span>{selectedLanguageLabel}</span>
-                      </button>
-                      <ChevronDown size={14} />
-                      {isLanguageMenuOpen ? (
-                        <div className="settings-select-popover" role="menu" aria-label={t.languageOptionsAria}>
-                          {languageOptions.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              role="menuitemradio"
-                              aria-checked={appPreferences.language === option.value}
-                              className={appPreferences.language === option.value ? "settings-select-option active" : "settings-select-option"}
-                              onClick={() => {
-                                setAppPreferences((current) => ({ ...current, language: option.value }));
-                                setIsLanguageMenuOpen(false);
-                              }}
-                            >
-                              <span>{option.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-row">
-                  <div className="settings-row-copy">
-                    <h2>{t.settingsAppearanceTitle}</h2>
-                    <p>{t.settingsAppearanceDescription}</p>
-                  </div>
-                  <div className="settings-row-control">
-                    <div className="settings-segmented-control settings-segmented-control-compact">
-                      <button type="button" className={appPreferences.appearance === "light" ? "settings-segment active" : "settings-segment"} onClick={() => setAppPreferences((current) => ({ ...current, appearance: "light" }))}><Sun size={14} /><span>{t.appearanceLight}</span></button>
-                      <button type="button" className={appPreferences.appearance === "dark" ? "settings-segment active" : "settings-segment"} onClick={() => setAppPreferences((current) => ({ ...current, appearance: "dark" }))}><Moon02 size={14} /><span>{t.appearanceDark}</span></button>
-                      <button type="button" className={appPreferences.appearance === "system" ? "settings-segment active" : "settings-segment"} onClick={() => setAppPreferences((current) => ({ ...current, appearance: "system" }))}><Laptop01 size={14} /><span>{t.appearanceSystem}</span></button>
-                    </div>
-                  </div>
-                </section>
-
-                
-                <section className="settings-row settings-row-theme">
-                  <div className="settings-row-copy">
-                    <h2>{t.settingsThemeTitle}</h2>
-                    <p>{t.settingsThemeDescription}</p>
-                  </div>
-                  <div className="settings-row-control">
-                    <div className="settings-select-shell" onPointerDown={(event) => event.stopPropagation()}>
-                      <button
-                        type="button"
-                        className={isThemeMenuOpen ? "settings-select-trigger settings-theme-trigger open" : "settings-select-trigger settings-theme-trigger"}
-                        aria-haspopup="menu"
-                        aria-expanded={isThemeMenuOpen}
-                        onClick={() => {
-                          const nextOpen = !isThemeMenuOpen;
-                          closeFloatingMenus();
-                          setIsThemeMenuOpen(nextOpen);
-                        }}
-                      >
-                        <span className="settings-theme-trigger-content">
-                          <span className="settings-theme-swatches" aria-hidden="true">
-                            {selectedTheme.swatches.map((swatch) => (
-                              <span key={swatch} className="settings-theme-swatch" style={{ background: swatch }} />
-                            ))}
-                          </span>
-                          <span className="settings-theme-label">{selectedTheme.label}</span>
-                        </span>
-                      </button>
-                      <ChevronDown size={14} />
-                      {isThemeMenuOpen ? (
-                        <div className="settings-select-popover settings-theme-popover" role="menu" aria-label={t.settingsThemeTitle}>
-                          {themeOptions.map((themeOption) => (
-                            <button
-                              key={themeOption.value}
-                              type="button"
-                              role="menuitemradio"
-                              aria-checked={appPreferences.theme === themeOption.value}
-                              className={appPreferences.theme === themeOption.value ? "settings-select-option settings-theme-menu-option active" : "settings-select-option settings-theme-menu-option"}
-                              onClick={() => {
-                                setAppPreferences((current) => ({ ...current, theme: themeOption.value }));
-                                setIsThemeMenuOpen(false);
-                              }}
-                            >
-                              <span className="settings-theme-trigger-content">
-                                <span className="settings-theme-swatches" aria-hidden="true">
-                                  {themeOption.swatches.map((swatch) => (
-                                    <span key={swatch} className="settings-theme-swatch" style={{ background: swatch }} />
-                                  ))}
-                                </span>
-                                <span className="settings-theme-label">{themeOption.label}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-row settings-row-theme">
-                  <div className="settings-row-copy">
-                    <h2>{t.settingsToolbarTitle}</h2>
-                    <p>{t.settingsToolbarDescription}</p>
-                  </div>
-                  <div className="settings-row-control">
-                    <div className="settings-toolbar-grid" onPointerDown={(event) => event.stopPropagation()}>
-                      {toolbarVisibilityOptions.map((option) => {
-                        const checked = appPreferences.toolbarVisibility[option.value];
-                        const isOnlyVisibleOption = checked && visibleToolbarGroupsCount === 1;
-
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            aria-label={option.label}
-                            title={option.label}
-                            disabled={isOnlyVisibleOption}
-                            className={checked ? "settings-toolbar-toggle active" : "settings-toolbar-toggle"}
-                            onClick={() => toggleToolbarVisibilityPreference(option.value)}
-                          >
-                            <span className="settings-toolbar-toggle-icon" aria-hidden="true">{option.icon}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-row settings-row-stack">
-                  <div className="settings-row-copy">
-                    <h2>{t.settingsNotesLocationTitle}</h2>
-                    <p>{t.settingsNotesLocationDescription}</p>
-                  </div>
-                  <div className="settings-storage-controls">
-                    <div className="settings-path-field">
-                      <code className="settings-path-value">{notesLocationLabel}</code>
-                    </div>
-                    <div className="settings-actions-row">
-                      <button type="button" className="settings-action-button secondary" onClick={() => void openNotesStorageDirectory()} disabled={!canOpenNotesStorageDirectory}>{t.openFolder}</button>
-                      <button type="button" className="settings-action-button secondary" onClick={() => void chooseNotesStorageDirectory()} disabled={!canChooseNotesStorageDirectory || isNotesStorageLoading}>{t.browse}</button>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-row settings-row-stack">
-                  <div className="settings-row-copy">
-                    <h2>{t.settingsDataTitle}</h2>
-                    <p>{t.settingsDataDescription}</p>
-                  </div>
-                  <div className="settings-row-control settings-row-control-end">
-                    <div className="settings-actions-row settings-actions-row-end">
-                      <button type="button" className="settings-action-button secondary" onClick={() => void exportAppData()}>{t.exportData}</button>
-                      <button type="button" className="settings-action-button danger" onClick={openClearDataModal}>{t.clearData}</button>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-row">
-                  <div className="settings-row-copy">
-                    <h2>{t.settingsVersionTitle}</h2>
-                    <p>{t.settingsVersionDescription}</p>
-                  </div>
-                  <div className="settings-row-control settings-row-control-end">
-                    <div className="settings-actions-row settings-actions-row-end">
-                        <span className="settings-badge">{t.betaBadge} v{appVersion}</span>
-                    </div>
-                  </div>
-                </section>
-                </div>
-              </div>
-            </section>
+            <SettingsPage
+              t={t}
+              appVersion={appVersion}
+              appPreferences={appPreferences}
+              languageOptions={languageOptions}
+              selectedLanguageLabel={selectedLanguageLabel}
+              isLanguageMenuOpen={isLanguageMenuOpen}
+              isThemeMenuOpen={isThemeMenuOpen}
+              selectedTheme={selectedTheme}
+              themeOptions={themeOptions}
+              toolbarVisibilityOptions={toolbarVisibilityOptions}
+              visibleToolbarGroupsCount={visibleToolbarGroupsCount}
+              notesLocationLabel={notesLocationLabel}
+              canOpenNotesStorageDirectory={canOpenNotesStorageDirectory}
+              canChooseNotesStorageDirectory={canChooseNotesStorageDirectory}
+              isNotesStorageLoading={isNotesStorageLoading}
+              onBack={() => setWorkspaceView("notes")}
+              closeFloatingMenus={closeFloatingMenus}
+              setIsLanguageMenuOpen={setIsLanguageMenuOpen}
+              setIsThemeMenuOpen={setIsThemeMenuOpen}
+              onLanguageChange={(value) => setAppPreferences((current) => ({ ...current, language: value }))}
+              onAppearanceChange={(value) => setAppPreferences((current) => ({ ...current, appearance: value }))}
+              onThemeChange={(value) => setAppPreferences((current) => ({ ...current, theme: value }))}
+              onToggleToolbarVisibility={toggleToolbarVisibilityPreference}
+              onOpenNotesStorageDirectory={openNotesStorageDirectory}
+              onChooseNotesStorageDirectory={chooseNotesStorageDirectory}
+              onExportAppData={exportAppData}
+              onOpenClearDataModal={openClearDataModal}
+            />
           ) : selectedNote ? (
-            <section className="editor-surface">
-              <nav className="breadcrumb" aria-label={t.breadcrumbAria}>
-                <span className="breadcrumb-path">
-                  <span className="breadcrumb-folder">{selectedNote ? folderLabel(selectedNote.folder) : t.fixedFolderAllNotes}</span>
-                  <span className="breadcrumb-separator">/</span>
-                  <span className="breadcrumb-note">{selectedNote?.title ?? t.welcomeNoteFallback}</span>
-                </span>
-                <div className="note-header-meta">
-                  <span className="note-created-at"><Calendar size={14} /><span>{formatCreatedAtLabel(selectedNote.createdAt, resolvedLanguage)}</span></span>
-                  <div className="note-header-menu-anchor" onPointerDown={(event) => event.stopPropagation()}>
-                    <button
-                      ref={noteHeaderMenuButtonRef}
-                      type="button"
-                      className={isNoteActionsMenuOpen ? "note-header-menu-button active" : "note-header-menu-button"}
-                      aria-label={t.noteActionsMore}
-                      onClick={(event) => {
-                        event.stopPropagation();
+            <NoteEditorPane
+              selectedNote={selectedNote}
+              resolvedLanguage={resolvedLanguage}
+              t={t}
+              toolbarVisibility={appPreferences.toolbarVisibility}
+              toolbarMenu={toolbarMenu}
+              linkInput={linkInput}
+              editor={editor}
+              editorUiState={editorUiState}
+              titleRef={titleRef}
+              noteHeaderMenuButtonRef={noteHeaderMenuButtonRef}
+              isNoteActionsMenuOpen={isNoteActionsMenuOpen}
+              folderLabel={folderLabel}
+              formatCreatedAtLabel={formatCreatedAtLabel}
+              setToolbarMenu={setToolbarMenu}
+              onToggleNoteActionsMenu={(event) => {
+                event.stopPropagation();
 
-                        if (isNoteActionsMenuOpen) {
-                          setIsNoteActionsMenuOpen(false);
-                          setNoteActionsMenuPosition(null);
-                          return;
-                        }
+                if (isNoteActionsMenuOpen) {
+                  setIsNoteActionsMenuOpen(false);
+                  setNoteActionsMenuPosition(null);
+                  return;
+                }
 
-                        const buttonRect = noteHeaderMenuButtonRef.current?.getBoundingClientRect();
-                        if (!buttonRect) {
-                          return;
-                        }
+                const buttonRect = noteHeaderMenuButtonRef.current?.getBoundingClientRect();
+                if (!buttonRect) {
+                  return;
+                }
 
-                        setIsNoteActionsMenuOpen(true);
-                        setNoteActionsMenuPosition({
-                          x: Math.max(CONTEXT_MENU_VIEWPORT_GAP, buttonRect.right - 188),
-                          y: buttonRect.bottom + 8
-                        });
-                      }}
-                    >
-                      <DotsHorizontal size={16} />
-                    </button>
-                  </div>
-                </div>
-              </nav>
-              <div className="editor-header">
-                <textarea
-                ref={titleRef}
-                className="editor-title"
-                value={selectedNote.title}
-                onChange={(event) => updateNote({ title: event.target.value })}
-                rows={1}
-              />
-
-
-              <div
-                className="markdown-toolbar"
-                aria-label={t.markdownTools}
-                onPointerDown={(event) => event.stopPropagation()}
-                onMouseDown={(event) => {
-                  if (event.target instanceof HTMLInputElement) {
-                    return;
-                  }
-
-                  event.preventDefault();
-                }}
-              >
-                {appPreferences.toolbarVisibility.history ? (
-                  <div className="toolbar-group">
-                    <button type="button" aria-label={t.toolbarUndo} disabled={!historyState.canUndo} onClick={() => editor?.chain().focus().undo().run()}>
-                      <ReverseLeft size={16} />
-                    </button>
-                    <button type="button" aria-label={t.toolbarRedo} disabled={!historyState.canRedo} onClick={() => editor?.chain().focus().redo().run()}>
-                      <ReverseRight size={16} />
-                    </button>
-                  </div>
-                ) : null}
-                {appPreferences.toolbarVisibility.headings || appPreferences.toolbarVisibility.quote ? (
-                  <div className="toolbar-group">
-                    {appPreferences.toolbarVisibility.headings ? (
-                      <div className="toolbar-menu-shell">
-                        <button
-                          type="button"
-                          className={toolbarMenu === "heading" ? "toolbar-menu-trigger active" : "toolbar-menu-trigger"}
-                          aria-label={t.toolbarHeading}
-                          aria-expanded={toolbarMenu === "heading"}
-                          onClick={() => setToolbarMenu((current) => (current === "heading" ? null : "heading"))}
-                        >
-                          <Heading01 size={16} />
-                          <ChevronDown size={13} />
-                        </button>
-                        {toolbarMenu === "heading" ? (
-                          <div className="toolbar-popover heading-popover">
-                            <button type="button" onClick={() => chooseBlockType("heading-1")}>
-                              <strong>
-                                H<sub>1</sub>
-                              </strong>
-                              <span>{t.toolbarHeading1}</span>
-                            </button>
-                            <button type="button" onClick={() => chooseBlockType("heading-2")}>
-                              <strong>
-                                H<sub>2</sub>
-                              </strong>
-                              <span>{t.toolbarHeading2}</span>
-                            </button>
-                            <button type="button" onClick={() => chooseBlockType("heading-3")}>
-                              <strong>
-                                H<sub>3</sub>
-                              </strong>
-                              <span>{t.toolbarHeading3}</span>
-                            </button>
-                            <button type="button" onClick={() => chooseBlockType("heading-4")}>
-                              <strong>
-                                H<sub>4</sub>
-                              </strong>
-                              <span>{t.toolbarHeading4}</span>
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {appPreferences.toolbarVisibility.quote ? (
-                      <button
-                        type="button"
-                        className={isEditorActive(editor, "blockquote")}
-                        aria-label={t.toolbarQuote}
-                        onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-                      >
-                        <BlockquoteIcon />
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {appPreferences.toolbarVisibility.separator || appPreferences.toolbarVisibility.textAlign ? (
-                  <div className="toolbar-group">
-                    {appPreferences.toolbarVisibility.separator ? (
-                      <button
-                        type="button"
-                        aria-label={t.toolbarSeparator}
-                        onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-                      >
-                        <SeparatorIcon />
-                      </button>
-                    ) : null}
-                    {appPreferences.toolbarVisibility.textAlign ? (
-                      <div className="toolbar-menu-shell">
-                        <button
-                          type="button"
-                          className={toolbarMenu === "text-align" ? "toolbar-menu-trigger active" : "toolbar-menu-trigger"}
-                          aria-label={t.toolbarTextAlign}
-                          aria-expanded={toolbarMenu === "text-align"}
-                          onClick={() => setToolbarMenu((current) => (current === "text-align" ? null : "text-align"))}
-                        >
-                          {currentTextAlign === "center" ? <AlignCenter size={16} /> : currentTextAlign === "right" ? <AlignRight size={16} /> : <AlignLeft size={16} />}
-                          <ChevronDown size={13} />
-                        </button>
-                        {toolbarMenu === "text-align" ? (
-                          <div className="toolbar-popover heading-popover">
-                            <button type="button" onClick={() => setTextAlignValue("left")}>
-                              <AlignLeft size={16} />
-                              <span>{t.toolbarAlignLeft}</span>
-                            </button>
-                            <button type="button" onClick={() => setTextAlignValue("center")}>
-                              <AlignCenter size={16} />
-                              <span>{t.toolbarAlignCenter}</span>
-                            </button>
-                            <button type="button" onClick={() => setTextAlignValue("right")}>
-                              <AlignRight size={16} />
-                              <span>{t.toolbarAlignRight}</span>
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {appPreferences.toolbarVisibility.lists || appPreferences.toolbarVisibility.tables ? (
-                  <div className="toolbar-group">
-                    {appPreferences.toolbarVisibility.lists ? (
-                      <div className="toolbar-menu-shell">
-                        <button
-                          type="button"
-                          className={toolbarMenu === "list" || editor?.isActive("bulletList") || editor?.isActive("orderedList") || editor?.isActive("taskList") ? "toolbar-menu-trigger active" : "toolbar-menu-trigger"}
-                          aria-label={t.toolbarList}
-                          aria-expanded={toolbarMenu === "list"}
-                          onClick={() => setToolbarMenu((current) => (current === "list" ? null : "list"))}
-                        >
-                          <List size={16} />
-                          <ChevronDown size={13} />
-                        </button>
-                        {toolbarMenu === "list" ? (
-                          <div className="toolbar-popover list-popover">
-                            <button type="button" onClick={() => chooseListType("bullet")}>
-                              <List size={16} />
-                              <span>{t.toolbarBulletList}</span>
-                            </button>
-                            <button type="button" onClick={() => chooseListType("ordered")}>
-                              <NumberedListIcon />
-                              <span>{t.toolbarOrderedList}</span>
-                            </button>
-                            <button type="button" onClick={() => chooseListType("task")}>
-                              <CheckSquare size={16} />
-                              <span>{t.toolbarTaskList}</span>
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {appPreferences.toolbarVisibility.tables ? (
-                      <div className="toolbar-menu-shell">
-                        <button
-                          type="button"
-                          className={toolbarMenu === "table" || editor?.isActive("table") ? "toolbar-menu-trigger active" : "toolbar-menu-trigger"}
-                          aria-label={t.toolbarTable}
-                          aria-expanded={toolbarMenu === "table"}
-                          onClick={() => setToolbarMenu((current) => (current === "table" ? null : "table"))}
-                        >
-                          <LayoutGrid02 size={16} />
-                          <ChevronDown size={13} />
-                        </button>
-                        {toolbarMenu === "table" ? (
-                          <div className="toolbar-popover table-popover">
-                            <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}>
-                              <LayoutGrid02 size={16} />
-                              <span>{t.toolbarInsertTable}</span>
-                            </button>
-                            <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().addRowAfter().run())}>
-                              <LayoutGrid02 size={16} />
-                              <span>{t.toolbarAddRow}</span>
-                            </button>
-                            <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().addColumnAfter().run())}>
-                              <LayoutGrid02 size={16} />
-                              <span>{t.toolbarAddColumn}</span>
-                            </button>
-                            <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().toggleHeaderRow().run())}>
-                              <LayoutGrid02 size={16} />
-                              <span>{t.toolbarToggleHeaderRow}</span>
-                            </button>
-                            <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().deleteRow().run())}>
-                              <Trash03 size={16} />
-                              <span>{t.toolbarDeleteRow}</span>
-                            </button>
-                            <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().deleteColumn().run())}>
-                              <Trash03 size={16} />
-                              <span>{t.toolbarDeleteColumn}</span>
-                            </button>
-                            <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().deleteTable().run())}>
-                              <Trash03 size={16} />
-                              <span>{t.toolbarDeleteTable}</span>
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {appPreferences.toolbarVisibility.bold || appPreferences.toolbarVisibility.italic || appPreferences.toolbarVisibility.strikethrough || appPreferences.toolbarVisibility.code || appPreferences.toolbarVisibility.underline || appPreferences.toolbarVisibility.highlight ? (
-                  <div className="toolbar-group">
-                    {appPreferences.toolbarVisibility.bold || appPreferences.toolbarVisibility.italic || appPreferences.toolbarVisibility.strikethrough || appPreferences.toolbarVisibility.code || appPreferences.toolbarVisibility.underline ? (
-                      <>
-                        {appPreferences.toolbarVisibility.bold ? (
-                          <button
-                            type="button"
-                            className={isEditorActive(editor, "bold")}
-                            aria-label={t.toolbarBold}
-                            onClick={() => editor?.chain().focus().toggleBold().run()}
-                          >
-                            <Bold01 size={16} />
-                          </button>
-                        ) : null}
-                        {appPreferences.toolbarVisibility.italic ? (
-                          <button
-                            type="button"
-                            className={isEditorActive(editor, "italic")}
-                            aria-label={t.toolbarItalic}
-                            onClick={() => editor?.chain().focus().toggleItalic().run()}
-                          >
-                            <Italic01 size={16} />
-                          </button>
-                        ) : null}
-                        {appPreferences.toolbarVisibility.strikethrough ? (
-                          <button
-                            type="button"
-                            className={isEditorActive(editor, "strike")}
-                            aria-label={t.toolbarStrikethrough}
-                            onClick={() => editor?.chain().focus().toggleStrike().run()}
-                          >
-                            <Strikethrough01 size={16} />
-                          </button>
-                        ) : null}
-                        {appPreferences.toolbarVisibility.code ? (
-                          <button
-                            type="button"
-                            className={isEditorActive(editor, "code")}
-                            aria-label={t.toolbarCode}
-                            onClick={() => editor?.chain().focus().toggleCode().run()}
-                          >
-                            <Code01 size={16} />
-                          </button>
-                        ) : null}
-                        {appPreferences.toolbarVisibility.underline ? (
-                          <button
-                            type="button"
-                            className={isEditorActive(editor, "underline")}
-                            aria-label={t.toolbarUnderline}
-                            onClick={() => editor?.chain().focus().toggleUnderline().run()}
-                          >
-                            <Underline01 size={16} />
-                          </button>
-                        ) : null}
-                      </>
-                    ) : null}
-                    {appPreferences.toolbarVisibility.highlight ? (
-                      <div className="toolbar-menu-shell">
-                        <button
-                          type="button"
-                          className={toolbarMenu === "highlight" || editor?.isActive("highlight") ? "active" : ""}
-                          aria-label={t.toolbarHighlight}
-                          aria-expanded={toolbarMenu === "highlight"}
-                          onClick={() => setToolbarMenu((current) => (current === "highlight" ? null : "highlight"))}
-                        >
-                          <HighlightIcon />
-                        </button>
-                        {toolbarMenu === "highlight" ? (
-                          <div className="toolbar-popover highlight-popover">
-                            {highlightColors.map((color) => (
-                              <button type="button" key={color.value} aria-label={t[color.key]} onClick={() => setHighlightColor(color.value)}>
-                                <span className="highlight-swatch" style={{ backgroundColor: color.value }} />
-                              </button>
-                            ))}
-                            <button type="button" className="highlight-clear" aria-label={t.toolbarClearHighlight} onClick={() => setHighlightColor(null)}>
-                              <SlashCircle01 size={19} />
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {appPreferences.toolbarVisibility.links || appPreferences.toolbarVisibility.superscript || appPreferences.toolbarVisibility.subscript ? (
-                  <div className="toolbar-group">
-                    {appPreferences.toolbarVisibility.links ? (
-                      <div className="toolbar-menu-shell">
-                        <button
-                          type="button"
-                          className={toolbarMenu === "link" || editor?.isActive("link") ? "active" : ""}
-                          aria-label={t.toolbarLink}
-                          aria-expanded={toolbarMenu === "link"}
-                          onClick={openLinkMenu}
-                        >
-                          <Link01 size={16} />
-                        </button>
-                        {toolbarMenu === "link" ? (
-                          <form
-                            className="toolbar-popover link-popover"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              setLink();
-                            }}
-                          >
-                            <input
-                              value={linkInput}
-                              onChange={(event) => setLinkInput(event.target.value)}
-                              placeholder={t.toolbarLinkPlaceholder}
-                              autoFocus
-                            />
-                            <button type="submit" aria-label={t.toolbarApplyLink}>
-                              <CornerDownLeft size={16} />
-                            </button>
-                            <span className="link-popover-divider" aria-hidden="true" />
-                            <button type="button" aria-label={t.toolbarOpenLink} onClick={openCurrentLink}>
-                              <LinkExternal01 size={16} />
-                            </button>
-                            <button type="button" aria-label={t.toolbarRemoveLink} onClick={removeLink}>
-                              <Trash03 size={16} />
-                            </button>
-                          </form>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {appPreferences.toolbarVisibility.superscript || appPreferences.toolbarVisibility.subscript ? (
-                      <>
-                        {appPreferences.toolbarVisibility.superscript ? (
-                          <button
-                            type="button"
-                            className={isEditorActive(editor, "superscript")}
-                            aria-label={t.toolbarSuperscript}
-                            onClick={() => editor?.chain().focus().toggleSuperscript().run()}
-                          >
-                            <SuperscriptIcon />
-                          </button>
-                        ) : null}
-                        {appPreferences.toolbarVisibility.subscript ? (
-                          <button
-                            type="button"
-                            className={isEditorActive(editor, "subscript")}
-                            aria-label={t.toolbarSubscript}
-                            onClick={() => editor?.chain().focus().toggleSubscript().run()}
-                          >
-                            <SubscriptIcon />
-                          </button>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-                {appPreferences.toolbarVisibility.image ? (
-                  <div className="toolbar-group">
-                    <button type="button" aria-label={t.toolbarAddImage} onClick={addImage}>
-                      <ImagePlus size={16} />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-              <div className="editor-body">
-                <EditorContent editor={editor} />
-              </div>
-            </section>
+                setIsNoteActionsMenuOpen(true);
+                setNoteActionsMenuPosition({
+                  x: Math.max(CONTEXT_MENU_VIEWPORT_GAP, buttonRect.right - 188),
+                  y: buttonRect.bottom + 8
+                });
+              }}
+              onTitleChange={(value) => updateNote({ title: value })}
+              onLinkInputChange={setLinkInput}
+              chooseBlockType={chooseBlockType}
+              setTextAlignValue={setTextAlignValue}
+              chooseListType={chooseListType}
+              runTableCommand={runTableCommand}
+              setHighlightColor={setHighlightColor}
+              openLinkMenu={openLinkMenu}
+              setLink={setLink}
+              openCurrentLink={openCurrentLink}
+              removeLink={removeLink}
+              addImage={addImage}
+            />
           ) : null}
         </SimpleBar>
 
@@ -3251,141 +2711,69 @@ export default function App() {
           </div>
         ) : null}
 
-        {(isSearchModalOpen || closingModals.search) ? (
-          <div className={closingModals.search ? "app-modal-backdrop closing" : "app-modal-backdrop"} onClick={closeSearchModal}>
-            <div
-              className={closingModals.search ? "app-modal search-modal closing" : "app-modal search-modal"}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="search-notes-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="search-modal-top">
-                <SearchMd size={18} />
-                <input
-                  ref={searchInputRef}
-                  className="search-modal-input"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder={t.searchPlaceholder}
-                  aria-label={t.searchAria}
-                />
-                <button type="button" className="search-modal-close" aria-label={t.searchClose} onClick={closeSearchModal}>
-                  <XClose size={18} />
-                </button>
-              </div>
-              <div className="search-modal-results">
-                <button type="button" className="search-result search-result-action" onClick={() => {
-                  addNewNote();
-                  closeSearchModal();
-                }}>
-                  <Edit05 size={16} />
-                  <span>{t.contextNewNote}</span>
-                </button>
-                {searchResults.length === 0 ? (
-                  <div className="search-empty-state">{t.searchNoResults}</div>
-                ) : (
-                  <div className="search-result-list">
-                    {searchResults.map((note) => (
-                      <button
-                        key={note.id}
-                        type="button"
-                        className="search-result"
-                        onClick={() => openSearchResult(note.id, note.folder)}
-                      >
-                        <span className="search-result-main">
-                          <span className="search-result-title">{note.title}</span>
-                          <span className="search-result-folder">{folderLabel(note.folder)}</span>
-                        </span>
-                        <span className="search-result-date">{formatCreatedAtLabel(note.updatedAt, resolvedLanguage)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {(isClearDataModalOpen || closingModals["clear-data"]) ? (
-          <div className={closingModals["clear-data"] ? "app-modal-backdrop closing" : "app-modal-backdrop"} onClick={closeClearDataModal}>
-            <div
-              className={closingModals["clear-data"] ? "app-modal closing" : "app-modal"}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="clear-data-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="app-modal-header">
-                <div>
-                  <h2 id="clear-data-title">{t.clearDataModalTitle}</h2>
-                  <p>{t.clearDataModalDescription}</p>
-                </div>
-                <button type="button" className="app-modal-close" aria-label={t.modalClose} onClick={closeClearDataModal}>
-                  <XClose size={18} />
-                </button>
-              </div>
-              <div className="app-modal-actions">
-                <button type="button" className="app-modal-button secondary" onClick={closeClearDataModal}>
-                  {t.clearDataModalCancel}
-                </button>
-                <button type="button" className="app-modal-button danger" onClick={() => void clearAppData()}>
-                  {t.clearDataModalConfirm}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {(isCreateFolderModalOpen || closingModals["create-folder"]) ? (
-          <div className={closingModals["create-folder"] ? "app-modal-backdrop closing" : "app-modal-backdrop"} onClick={closeCreateFolderModal}>
-            <div
-              className={closingModals["create-folder"] ? "app-modal closing" : "app-modal"}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="create-folder-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="app-modal-header">
-                <div>
-                  <h2 id="create-folder-title">{t.modalNewFolderTitle}</h2>
-                  <p>{t.modalNewFolderDescription}</p>
-                </div>
-                <button type="button" className="app-modal-close" aria-label={t.modalClose} onClick={closeCreateFolderModal}>
-                  <XClose size={18} />
-                </button>
-              </div>
-              <form
-                className="app-modal-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  createFolder();
-                }}
-              >
-                <input
-                  ref={newFolderInputRef}
-                  className="app-modal-input"
-                  value={newFolderName}
-                  onChange={(event) => setNewFolderName(event.target.value)}
-                  placeholder={t.folderNamePlaceholder}
-                />
-                <div className="app-modal-actions">
-                  <button type="button" className="app-modal-button secondary" onClick={closeCreateFolderModal}>
-                    {t.cancel}
-                  </button>
-                  <button type="submit" className="app-modal-button primary" disabled={!newFolderName.trim()}>
-                    {t.create}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        ) : null}
+        <Suspense fallback={null}>
+          <SearchModal
+            isOpen={isSearchModalOpen}
+            isClosing={closingModals.search}
+            searchInputRef={searchInputRef}
+            searchQuery={searchQuery}
+            searchResults={searchResults}
+            resolvedLanguage={resolvedLanguage}
+            t={t}
+            onSearchQueryChange={setSearchQuery}
+            onClose={closeSearchModal}
+            onAddNote={() => {
+              addNewNote();
+              closeSearchModal();
+            }}
+            onOpenResult={openSearchResult}
+            folderLabel={folderLabel}
+            formatCreatedAtLabel={formatCreatedAtLabel}
+          />
+          <ClearDataModal
+            isOpen={isClearDataModalOpen}
+            isClosing={closingModals["clear-data"]}
+            t={t}
+            onClose={closeClearDataModal}
+            onConfirm={() => void clearAppData()}
+          />
+          <CreateFolderModal
+            isOpen={isCreateFolderModalOpen}
+            isClosing={closingModals["create-folder"]}
+            newFolderInputRef={newFolderInputRef}
+            newFolderName={newFolderName}
+            t={t}
+            onFolderNameChange={setNewFolderName}
+            onClose={closeCreateFolderModal}
+            onCreate={createFolder}
+          />
+        </Suspense>
       </main>
       </div>
     </>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
