@@ -11,3 +11,6 @@ pnpm-debug.log*
 .npm-cache/
 .env
 .env.*
+.codex-git-tmp/
+.codex-security-scans/
+recovery/

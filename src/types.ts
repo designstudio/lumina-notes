@@ -1,11 +1,4 @@
-export type FolderKey =
-  | "get-started"
-  | "all"
-  | "work"
-  | "personal"
-  | "ideas"
-  | "archive"
-  | "favorites";
+﻿export type FolderKey = string;
 
 export type Note = {
   id: string;
@@ -17,6 +10,7 @@ export type Note = {
   pinned?: boolean;
   sortOrder?: number;
   color: string;
+  createdAt: string;
   updatedAt: string;
   checklist: { id: string; label: string; done: boolean }[];
 };

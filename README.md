@@ -1,4 +1,4 @@
-# Lumina Notes
+# Lophos Notes
 
 App desktop de notas inspirado no Apple Notes e no Soba, com foco em uma interface elegante e pronta para distribuição na Microsoft Store.
 

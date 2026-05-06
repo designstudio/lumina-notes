@@ -15,13 +15,14 @@
   },
   "build": {
     "appId": "com.lumina.notes",
-    "productName": "Lumina Notes",
+    "productName": "Lophos Notes",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "assets/**/*",
       "package.json"
     ],
     "win": {
@@ -32,15 +33,17 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "icon": "assets/windows/icon.ico"
     },
     "appx": {
-      "applicationId": "LuminaNotes",
-      "backgroundColor": "#f4efe7",
-      "displayName": "Lumina Notes",
-      "identityName": "LuminaNotes",
-      "publisherDisplayName": "Lumina Notes"
-    }
+      "applicationId": "LophosNotes",
+      "backgroundColor": "#ffffff",
+      "displayName": "Lophos Notes",
+      "identityName": "LophosNotes",
+      "publisherDisplayName": "Lophos Notes"
+    },
+    "icon": "assets/windows/icon.ico"
   },
   "dependencies": {
     "@tiptap/extension-highlight": "^3.22.5",
@@ -48,13 +51,19 @@
     "@tiptap/extension-placeholder": "^3.22.5",
     "@tiptap/extension-subscript": "^3.22.5",
     "@tiptap/extension-superscript": "^3.22.5",
+    "@tiptap/extension-table": "^3.22.5",
     "@tiptap/extension-task-item": "^3.22.5",
     "@tiptap/extension-task-list": "^3.22.5",
+    "@tiptap/extension-text-align": "^3.22.5",
     "@tiptap/react": "^3.22.5",
     "@tiptap/starter-kit": "^3.22.5",
     "@untitledui/icons": "^0.0.22",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "simplebar": "^6.3.3",
+    "simplebar-react": "^3.3.2",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",
