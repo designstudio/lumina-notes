@@ -5,7 +5,7 @@
   Bold01,
   Calendar,
   ChevronDown,
-  Code01,
+  CodeSquare01,
   DotsHorizontal,
   Italic01,
   LayoutGrid02,
@@ -14,14 +14,13 @@
   Underline01
 } from "@untitledui/icons";
 import { EditorContent, type Editor } from "@tiptap/react";
-import { useRef, useState, type Dispatch, type MouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type MouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
 import { BlockquoteButton } from "@/components/tiptap-ui/blockquote-button";
 import { HeadingDropdownMenu } from "@/components/tiptap-ui/heading-dropdown-menu";
 import { ImageUploadButton } from "@/components/tiptap-ui/image-upload-button";
 import { ListDropdownMenu } from "@/components/tiptap-ui/list-dropdown-menu";
 import { ColorHighlightPopover } from "@/components/tiptap-ui/color-highlight-popover";
 import { LinkPopover } from "@/components/tiptap-ui/link-popover";
-import { TextAlignButton } from "@/components/tiptap-ui/text-align-button";
 import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button";
 import { ImageAligner } from "./image-tiptap";
 import { type ToolbarMenu, type ToolbarVisibilityPreferences } from "../../app-model";
@@ -31,7 +30,6 @@ import { type Note } from "../../types";
 type EditorUiState = {
   canUndo: boolean;
   canRedo: boolean;
-  currentTextAlign: "left" | "center" | "right";
   isBlockquote: boolean;
   isBulletList: boolean;
   isOrderedList: boolean;
@@ -40,7 +38,7 @@ type EditorUiState = {
   isBold: boolean;
   isItalic: boolean;
   isStrike: boolean;
-  isCode: boolean;
+  isCodeBlock: boolean;
   isUnderline: boolean;
   isHighlight: boolean;
   isLink: boolean;
@@ -67,6 +65,8 @@ type NoteEditorPaneProps = {
   runTableCommand: (command: () => void) => void;
 };
 
+const TOOLBAR_POPOVER_DURATION_MS = 150;
+
 function SeparatorIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -78,7 +78,8 @@ function SeparatorIcon() {
 function SuperscriptIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M3 19L10 12M10 19L3 12M14.5 7.5L18 4M18 4V8M18 4H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 7L4 17M4 7L14 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18 5.66667C18 5.22464 18.158 4.80072 18.4393 4.48816C18.7206 4.17559 19.1022 4 19.5 4C19.8978 4 20.2794 4.17559 20.5607 4.48816C20.842 4.80072 21 5.22464 21 5.66667C21 6.15917 20.625 6.5 20.25 6.91667L18 9H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -86,7 +87,8 @@ function SuperscriptIcon() {
 function SubscriptIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M3 8L10 15M10 8L3 15M14 18H20M20 18V14M20 18L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 7L4 17M4 7L14 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18 15.6667C18 15.2246 18.158 14.8007 18.4393 14.4882C18.7206 14.1756 19.1022 14 19.5 14C19.8978 14 20.2794 14.1756 20.5607 14.4882C20.842 14.8007 21 15.2246 21 15.6667C21 16.1592 20.625 16.5 20.25 16.9167L18 19H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -123,7 +125,42 @@ export function NoteEditorPane({
   const toolbarScrollRef = useRef<HTMLDivElement | null>(null);
   const toolbarDragStateRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number; moved: boolean } | null>(null);
   const toolbarSuppressClickRef = useRef(false);
+  const tablePopoverCloseTimeoutRef = useRef<number | null>(null);
   const [toolbarTooltip, setToolbarTooltip] = useState<{ label: string; x: number; y: number } | null>(null);
+  const [renderedToolbarMenu, setRenderedToolbarMenu] = useState<ToolbarMenu>(toolbarMenu);
+  const [isToolbarMenuClosing, setIsToolbarMenuClosing] = useState(false);
+
+  useEffect(() => {
+    if (tablePopoverCloseTimeoutRef.current) {
+      window.clearTimeout(tablePopoverCloseTimeoutRef.current);
+      tablePopoverCloseTimeoutRef.current = null;
+    }
+
+    if (toolbarMenu === "table") {
+      setRenderedToolbarMenu("table");
+      setIsToolbarMenuClosing(false);
+      return;
+    }
+
+    if (renderedToolbarMenu !== "table") {
+      return;
+    }
+
+    setIsToolbarMenuClosing(true);
+    tablePopoverCloseTimeoutRef.current = window.setTimeout(() => {
+      setRenderedToolbarMenu(null);
+      setIsToolbarMenuClosing(false);
+      tablePopoverCloseTimeoutRef.current = null;
+    }, TOOLBAR_POPOVER_DURATION_MS);
+  }, [renderedToolbarMenu, toolbarMenu]);
+
+  useEffect(() => {
+    return () => {
+      if (tablePopoverCloseTimeoutRef.current) {
+        window.clearTimeout(tablePopoverCloseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   function handleToolbarPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const container = toolbarScrollRef.current;
@@ -209,6 +246,17 @@ export function NoteEditorPane({
     setToolbarTooltip(null);
   }
 
+  function handleToolbarActionPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function handleToolbarMenuTriggerPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    event.stopPropagation();
+  }
+
+  const isEditorReady = Boolean(editor && !editor.isDestroyed);
+
   return (
     <section className="editor-surface">
       <nav className="breadcrumb" aria-label={t.breadcrumbAria}>
@@ -238,6 +286,14 @@ export function NoteEditorPane({
           className="editor-title"
           value={selectedNote.title}
           onChange={(event) => onTitleChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey) {
+              return;
+            }
+
+            event.preventDefault();
+            editor?.chain().focus().run();
+          }}
           rows={1}
         />
 
@@ -252,135 +308,159 @@ export function NoteEditorPane({
           onMouseMove={handleToolbarMouseMove}
           onMouseLeave={hideToolbarTooltip}
         >
-          <div
-            className="markdown-toolbar"
-            aria-label={t.markdownTools}
-          >
-          {toolbarVisibility.history ? (
-            <div className="toolbar-group">
-              <UndoRedoButton editor={editor} action="undo" hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarUndo} tooltip={t.toolbarUndo} />
-              <UndoRedoButton editor={editor} action="redo" hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarRedo} tooltip={t.toolbarRedo} />
-            </div>
-          ) : null}
-          {toolbarVisibility.headings || toolbarVisibility.quote ? (
-            <div className="toolbar-group">
-              {toolbarVisibility.headings ? (
-                <HeadingDropdownMenu
-                  editor={editor}
-                  levels={[1, 2, 3, 4]}
-                  hideWhenUnavailable={false}
-                  modal={false}
-                  showTooltip={false}
-                  aria-label={t.toolbarHeading}
-                  tooltip={t.toolbarHeading}
-                />
-              ) : null}
-              {toolbarVisibility.quote ? (
-                <BlockquoteButton editor={editor} hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarQuote} tooltip={t.toolbarQuote}>
-                  <BlockquoteIcon />
-                </BlockquoteButton>
-              ) : null}
-            </div>
-          ) : null}
-          {toolbarVisibility.separator || toolbarVisibility.textAlign ? (
-            <div className="toolbar-group">
-              {toolbarVisibility.separator ? (
-                <button type="button" aria-label={t.toolbarSeparator} onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
-                  <SeparatorIcon />
-                </button>
-              ) : null}
-              {toolbarVisibility.textAlign ? (
-                <>
-                  <TextAlignButton editor={editor} align="left" hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarAlignLeft} tooltip={t.toolbarAlignLeft} />
-                  <TextAlignButton editor={editor} align="center" hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarAlignCenter} tooltip={t.toolbarAlignCenter} />
-                  <TextAlignButton editor={editor} align="right" hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarAlignRight} tooltip={t.toolbarAlignRight} />
-                </>
-              ) : null}
-            </div>
-          ) : null}
-          {toolbarVisibility.lists || toolbarVisibility.tables ? (
-            <div className="toolbar-group">
-              {toolbarVisibility.lists ? (
-                <ListDropdownMenu
-                  editor={editor}
-                  types={["bulletList", "orderedList", "taskList"]}
-                  hideWhenUnavailable={false}
-                  modal={false}
-                  showTooltip={false}
-                  aria-label={t.toolbarList}
-                  tooltip={t.toolbarList}
-                />
-              ) : null}
-              {toolbarVisibility.tables ? (
-                <div className="toolbar-menu-shell">
-                  <button
-                    type="button"
-                    className={toolbarMenu === "table" || editorUiState.isTable ? "toolbar-menu-trigger active" : "toolbar-menu-trigger"}
-                    aria-label={t.toolbarTable}
-                    aria-expanded={toolbarMenu === "table"}
-                    onClick={() => setToolbarMenu((current) => (current === "table" ? null : "table"))}
-                  >
-                    <LayoutGrid02 size={16} />
-                    <ChevronDown size={13} />
+          {isEditorReady ? (
+            <div
+              className="markdown-toolbar"
+              aria-label={t.markdownTools}
+            >
+            {toolbarVisibility.history ? (
+              <div className="toolbar-group">
+                <UndoRedoButton editor={editor} action="undo" hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarUndo} tooltip={t.toolbarUndo} />
+                <UndoRedoButton editor={editor} action="redo" hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarRedo} tooltip={t.toolbarRedo} />
+              </div>
+            ) : null}
+            {toolbarVisibility.headings || toolbarVisibility.lists || toolbarVisibility.tables || toolbarVisibility.quote || toolbarVisibility.code ? (
+              <div className="toolbar-group">
+                {toolbarVisibility.headings ? (
+                  <HeadingDropdownMenu
+                    editor={editor}
+                    levels={[1, 2, 3, 4]}
+                    hideWhenUnavailable={false}
+                    modal={false}
+                    showTooltip={false}
+                    aria-label={t.toolbarHeading}
+                    tooltip={t.toolbarHeading}
+                  />
+                ) : null}
+                {toolbarVisibility.lists ? (
+                  <ListDropdownMenu
+                    editor={editor}
+                    types={["bulletList", "orderedList", "taskList"]}
+                    hideWhenUnavailable={false}
+                    modal={false}
+                    showTooltip={false}
+                    triggerLabel={t.toolbarList}
+                    labels={{
+                      bulletList: t.toolbarBulletList,
+                      orderedList: t.toolbarOrderedList,
+                      taskList: t.toolbarTaskList
+                    }}
+                    aria-label={t.toolbarList}
+                    tooltip={t.toolbarList}
+                  />
+                ) : null}
+                {toolbarVisibility.tables ? (
+                  <div className="toolbar-menu-shell">
+                      <button
+                        type="button"
+                        className={toolbarMenu === "table" || editorUiState.isTable ? "toolbar-menu-trigger active" : "toolbar-menu-trigger"}
+                        aria-label={t.toolbarTable}
+                        aria-expanded={toolbarMenu === "table"}
+                        onPointerDown={handleToolbarMenuTriggerPointerDown}
+                        onClick={() => setToolbarMenu((current) => (current === "table" ? null : "table"))}
+                      >
+                        <LayoutGrid02 size={16} />
+                        <ChevronDown size={13} />
+                      </button>
+                    {renderedToolbarMenu === "table" ? (
+                      <div className={isToolbarMenuClosing ? "toolbar-popover table-popover closing" : "toolbar-popover table-popover"} onPointerDown={handleToolbarActionPointerDown}>
+                        <button type="button" onPointerDown={handleToolbarActionPointerDown} onClick={() => runTableCommand(() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}>
+                          <LayoutGrid02 size={16} />
+                          <span>{t.toolbarInsertTable}</span>
+                        </button>
+                        <button type="button" onPointerDown={handleToolbarActionPointerDown} onClick={() => runTableCommand(() => editor?.chain().focus().addRowAfter().run())}>
+                          <LayoutGrid02 size={16} />
+                          <span>{t.toolbarAddRow}</span>
+                        </button>
+                        <button type="button" onPointerDown={handleToolbarActionPointerDown} onClick={() => runTableCommand(() => editor?.chain().focus().addColumnAfter().run())}>
+                          <LayoutGrid02 size={16} />
+                          <span>{t.toolbarAddColumn}</span>
+                        </button>
+                        <button type="button" onPointerDown={handleToolbarActionPointerDown} onClick={() => runTableCommand(() => editor?.chain().focus().toggleHeaderRow().run())}>
+                          <LayoutGrid02 size={16} />
+                          <span>{t.toolbarToggleHeaderRow}</span>
+                        </button>
+                        <button type="button" onPointerDown={handleToolbarActionPointerDown} onClick={() => runTableCommand(() => editor?.chain().focus().deleteRow().run())}>
+                          <Trash03 size={16} />
+                          <span>{t.toolbarDeleteRow}</span>
+                        </button>
+                        <button type="button" onPointerDown={handleToolbarActionPointerDown} onClick={() => runTableCommand(() => editor?.chain().focus().deleteColumn().run())}>
+                          <Trash03 size={16} />
+                          <span>{t.toolbarDeleteColumn}</span>
+                        </button>
+                        <button type="button" onPointerDown={handleToolbarActionPointerDown} onClick={() => runTableCommand(() => editor?.chain().focus().deleteTable().run())}>
+                          <Trash03 size={16} />
+                          <span>{t.toolbarDeleteTable}</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {toolbarVisibility.quote ? (
+                  <BlockquoteButton editor={editor} hideWhenUnavailable={false} showTooltip={false} aria-label={t.toolbarQuote} tooltip={t.toolbarQuote}>
+                    <BlockquoteIcon />
+                  </BlockquoteButton>
+                ) : null}
+                {toolbarVisibility.code ? <button type="button" className={editorUiState.isCodeBlock ? "active" : ""} aria-label={t.toolbarCode} onClick={() => editor?.chain().focus().toggleCodeBlock().run()}><CodeSquare01 size={16} /></button> : null}
+              </div>
+            ) : null}
+            {toolbarVisibility.bold || toolbarVisibility.italic || toolbarVisibility.strikethrough || toolbarVisibility.underline || toolbarVisibility.highlight || toolbarVisibility.separator ? (
+              <div className="toolbar-group">
+                {toolbarVisibility.bold || toolbarVisibility.italic || toolbarVisibility.strikethrough || toolbarVisibility.underline ? (
+                  <>
+                    {toolbarVisibility.bold ? <button type="button" className={editorUiState.isBold ? "active" : ""} aria-label={t.toolbarBold} onClick={() => editor?.chain().focus().toggleBold().run()}><Bold01 size={16} /></button> : null}
+                    {toolbarVisibility.italic ? <button type="button" className={editorUiState.isItalic ? "active" : ""} aria-label={t.toolbarItalic} onClick={() => editor?.chain().focus().toggleItalic().run()}><Italic01 size={16} /></button> : null}
+                    {toolbarVisibility.strikethrough ? <button type="button" className={editorUiState.isStrike ? "active" : ""} aria-label={t.toolbarStrikethrough} onClick={() => editor?.chain().focus().toggleStrike().run()}><Strikethrough01 size={16} /></button> : null}
+                    {toolbarVisibility.underline ? <button type="button" className={editorUiState.isUnderline ? "active" : ""} aria-label={t.toolbarUnderline} onClick={() => editor?.chain().focus().toggleUnderline().run()}><Underline01 size={16} /></button> : null}
+                  </>
+                ) : null}
+                {toolbarVisibility.highlight ? (
+                  <ColorHighlightPopover
+                    editor={editor}
+                    hideWhenUnavailable={false}
+                    showTooltip={false}
+                    aria-label={t.toolbarHighlight}
+                    tooltip={t.toolbarHighlight}
+                  />
+                ) : null}
+                {toolbarVisibility.separator ? (
+                  <button type="button" aria-label={t.toolbarSeparator} onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
+                    <SeparatorIcon />
                   </button>
-                  {toolbarMenu === "table" ? (
-                    <div className="toolbar-popover table-popover">
-                      <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}><LayoutGrid02 size={16} /><span>{t.toolbarInsertTable}</span></button>
-                      <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().addRowAfter().run())}><LayoutGrid02 size={16} /><span>{t.toolbarAddRow}</span></button>
-                      <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().addColumnAfter().run())}><LayoutGrid02 size={16} /><span>{t.toolbarAddColumn}</span></button>
-                      <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().toggleHeaderRow().run())}><LayoutGrid02 size={16} /><span>{t.toolbarToggleHeaderRow}</span></button>
-                      <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().deleteRow().run())}><Trash03 size={16} /><span>{t.toolbarDeleteRow}</span></button>
-                      <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().deleteColumn().run())}><Trash03 size={16} /><span>{t.toolbarDeleteColumn}</span></button>
-                      <button type="button" onClick={() => runTableCommand(() => editor?.chain().focus().deleteTable().run())}><Trash03 size={16} /><span>{t.toolbarDeleteTable}</span></button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {toolbarVisibility.bold || toolbarVisibility.italic || toolbarVisibility.strikethrough || toolbarVisibility.code || toolbarVisibility.underline || toolbarVisibility.highlight ? (
-            <div className="toolbar-group">
-              {toolbarVisibility.bold || toolbarVisibility.italic || toolbarVisibility.strikethrough || toolbarVisibility.code || toolbarVisibility.underline ? (
-                <>
-                  {toolbarVisibility.bold ? <button type="button" className={editorUiState.isBold ? "active" : ""} aria-label={t.toolbarBold} onClick={() => editor?.chain().focus().toggleBold().run()}><Bold01 size={16} /></button> : null}
-                  {toolbarVisibility.italic ? <button type="button" className={editorUiState.isItalic ? "active" : ""} aria-label={t.toolbarItalic} onClick={() => editor?.chain().focus().toggleItalic().run()}><Italic01 size={16} /></button> : null}
-                  {toolbarVisibility.strikethrough ? <button type="button" className={editorUiState.isStrike ? "active" : ""} aria-label={t.toolbarStrikethrough} onClick={() => editor?.chain().focus().toggleStrike().run()}><Strikethrough01 size={16} /></button> : null}
-                  {toolbarVisibility.code ? <button type="button" className={editorUiState.isCode ? "active" : ""} aria-label={t.toolbarCode} onClick={() => editor?.chain().focus().toggleCode().run()}><Code01 size={16} /></button> : null}
-                  {toolbarVisibility.underline ? <button type="button" className={editorUiState.isUnderline ? "active" : ""} aria-label={t.toolbarUnderline} onClick={() => editor?.chain().focus().toggleUnderline().run()}><Underline01 size={16} /></button> : null}
-                </>
-              ) : null}
-              {toolbarVisibility.highlight ? (
-                <ColorHighlightPopover
+                ) : null}
+              </div>
+            ) : null}
+            {toolbarVisibility.superscript || toolbarVisibility.subscript || toolbarVisibility.links ? (
+              <div className="toolbar-group">
+                {toolbarVisibility.superscript ? <button type="button" className={editorUiState.isSuperscript ? "active" : ""} aria-label={t.toolbarSuperscript} onClick={() => editor?.chain().focus().toggleSuperscript().run()}><SuperscriptIcon /></button> : null}
+                {toolbarVisibility.subscript ? <button type="button" className={editorUiState.isSubscript ? "active" : ""} aria-label={t.toolbarSubscript} onClick={() => editor?.chain().focus().toggleSubscript().run()}><SubscriptIcon /></button> : null}
+                {toolbarVisibility.links ? (
+                  <LinkPopover editor={editor} hideWhenUnavailable={false} autoOpenOnLinkActive={false} showTooltip={false} aria-label={t.toolbarLink} tooltip={t.toolbarLink} />
+                ) : null}
+              </div>
+            ) : null}
+            {toolbarVisibility.image ? (
+              <div className="toolbar-group">
+                <ImageUploadButton
                   editor={editor}
                   hideWhenUnavailable={false}
                   showTooltip={false}
-                  aria-label={t.toolbarHighlight}
-                  tooltip={t.toolbarHighlight}
+                  aria-label={t.toolbarAddImage}
+                  tooltip={t.toolbarAddImage}
                 />
-              ) : null}
+              </div>
+            ) : null}
             </div>
-          ) : null}
-          {toolbarVisibility.links || toolbarVisibility.superscript || toolbarVisibility.subscript ? (
-            <div className="toolbar-group">
-              {toolbarVisibility.links ? (
-                <LinkPopover editor={editor} hideWhenUnavailable={false} autoOpenOnLinkActive={false} showTooltip={false} aria-label={t.toolbarLink} tooltip={t.toolbarLink} />
-              ) : null}
-              {toolbarVisibility.superscript ? <button type="button" className={editorUiState.isSuperscript ? "active" : ""} aria-label={t.toolbarSuperscript} onClick={() => editor?.chain().focus().toggleSuperscript().run()}><SuperscriptIcon /></button> : null}
-              {toolbarVisibility.subscript ? <button type="button" className={editorUiState.isSubscript ? "active" : ""} aria-label={t.toolbarSubscript} onClick={() => editor?.chain().focus().toggleSubscript().run()}><SubscriptIcon /></button> : null}
+          ) : (
+            <div className="markdown-toolbar markdown-toolbar-loading" aria-hidden="true">
+              <div className="toolbar-loading-group toolbar-loading-group-sm" />
+              <div className="toolbar-loading-group toolbar-loading-group-md" />
+              <div className="toolbar-loading-group toolbar-loading-group-md" />
+              <div className="toolbar-loading-group toolbar-loading-group-lg" />
+              <div className="toolbar-loading-group toolbar-loading-group-md" />
+              <div className="toolbar-loading-group toolbar-loading-group-sm" />
             </div>
-          ) : null}
-          {toolbarVisibility.image ? (
-            <div className="toolbar-group">
-              <ImageUploadButton
-                editor={editor}
-                hideWhenUnavailable={false}
-                showTooltip={false}
-                aria-label={t.toolbarAddImage}
-                tooltip={t.toolbarAddImage}
-              />
-            </div>
-          ) : null}
-          </div>
+          )}
         </div>
       </div>
 

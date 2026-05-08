@@ -184,6 +184,17 @@
   }
 }
 
+.tiptap-dropdown-menu-item.tiptap-button,
+.tiptap-dropdown-menu-item.tiptap-button .tiptap-button-text,
+.tiptap-dropdown-menu-item.tiptap-button .tiptap-button-icon,
+.tiptap-dropdown-menu-item.tiptap-button .tiptap-button-icon-sub,
+.tiptap-dropdown-menu-item .tiptap-button,
+.tiptap-dropdown-menu-item .tiptap-button .tiptap-button-text,
+.tiptap-dropdown-menu-item .tiptap-button .tiptap-button-icon,
+.tiptap-dropdown-menu-item .tiptap-button .tiptap-button-icon-sub {
+  font-weight: 400;
+}
+
 /* --------------------------------------------
 ----------- BUTTON COLOR SETTINGS -------------
 -------------------------------------------- */

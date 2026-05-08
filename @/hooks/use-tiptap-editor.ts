@@ -72,5 +72,23 @@ export function useTiptapEditor(providedEditor?: Editor | null): {
     },
   })
 
-  return editorState ?? { editor: null }
+  if (editorState?.editor) {
+    return editorState
+  }
+
+  const fallbackEditor = storageEditor ?? mainEditor
+
+  if (!isEditorAlive(fallbackEditor)) {
+    return { editor: null }
+  }
+
+  try {
+    return {
+      editor: fallbackEditor,
+      editorState: fallbackEditor.state,
+      canCommand: safeCan(fallbackEditor) ? fallbackEditor.can : undefined,
+    }
+  } catch {
+    return { editor: fallbackEditor }
+  }
 }

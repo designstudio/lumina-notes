@@ -34,7 +34,6 @@ export function defaultToolbarVisibility(): ToolbarVisibilityPreferences {
     superscript: true,
     subscript: true,
     separator: false,
-    textAlign: false,
     image: true
   };
 }
@@ -57,7 +56,6 @@ export function toolbarVisibilityFromPartial(parsed?: Partial<ToolbarVisibilityP
     superscript: parsed?.superscript ?? defaults.superscript,
     subscript: parsed?.subscript ?? defaults.subscript,
     separator: parsed?.separator ?? defaults.separator,
-    textAlign: parsed?.textAlign ?? defaults.textAlign,
     image: parsed?.image ?? defaults.image
   };
 }
@@ -70,7 +68,7 @@ export function defaultAppPreferences(): AppPreferences {
   return {
     language: "system",
     appearance: "system",
-    theme: "blue-lagoon",
+    theme: "cloudy-day",
     noteLayoutSize: "medium",
     toolbarVisibility: defaultToolbarVisibility()
   };

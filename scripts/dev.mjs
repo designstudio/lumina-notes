@@ -5,7 +5,8 @@ import path from "node:path";
 import waitOn from "wait-on";
 
 const children = [];
-const rendererEntry = path.resolve("dist/index.html");
+const rendererEntry = path.resolve("dist-dev/index.html");
+const electronMainEntry = path.resolve("dist-electron/main.js");
 
 function run(label, command, args) {
   const child = spawn(command, args, {
@@ -47,7 +48,7 @@ process.on("SIGTERM", () => {
 
 async function waitForRendererFile() {
   await waitOn({
-    resources: ["file:" + rendererEntry, "file:" + path.resolve("dist-electron/main.js")],
+    resources: ["file:" + rendererEntry, "file:" + electronMainEntry],
     timeout: 30000
   });
 
@@ -65,13 +66,12 @@ async function waitForRendererFile() {
 }
 
 run("tsc", "npx", ["tsc", "-p", "tsconfig.electron.json", "--watch"]);
-run("vite", "npx", ["vite", "build", "--watch"]);
-
+await fs.rm(path.dirname(rendererEntry), { recursive: true, force: true });
+run("vite", "npx", ["vite", "build", "--watch", "--mode", "development"]);
 await waitForRendererFile();
+const electronProcess = run("electron", "npx", ["electron", "."]);
 
-const electron = run("electron", "npx", ["electron", "."]);
-
-electron.on("exit", () => {
+electronProcess.on("exit", () => {
   shutdown();
   process.exit(0);
 });

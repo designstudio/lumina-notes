@@ -45,6 +45,14 @@ export interface ListDropdownMenuProps extends Omit<ButtonProps, "type"> {
    * Whether the dropdown should use a modal
    */
   modal?: boolean
+  /**
+   * Optional translated label for the dropdown trigger.
+   */
+  triggerLabel?: string
+  /**
+   * Optional translated labels for each list type.
+   */
+  labels?: Partial<Record<ListType, string>>
 }
 
 export function ListDropdownMenu({
@@ -53,6 +61,8 @@ export function ListDropdownMenu({
   hideWhenUnavailable = false,
   onOpenChange,
   modal = true,
+  triggerLabel = "List",
+  labels,
   ...props
 }: ListDropdownMenuProps) {
   const { editor } = useTiptapEditor(providedEditor)
@@ -63,6 +73,7 @@ export function ListDropdownMenu({
       editor,
       types,
       hideWhenUnavailable,
+      labels,
     })
 
   const handleOnOpenChange = useCallback(
@@ -88,8 +99,8 @@ export function ListDropdownMenu({
           tabIndex={-1}
           disabled={!canToggle}
           data-disabled={!canToggle}
-          aria-label="List options"
-          tooltip="List"
+          aria-label={triggerLabel}
+          tooltip={triggerLabel}
           {...props}
         >
           <Icon className="tiptap-button-icon" />

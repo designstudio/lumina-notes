@@ -7,6 +7,14 @@ const isDev = !app.isPackaged;
 const rendererEntry = process.env.ELECTRON_RENDERER_ENTRY;
 const notesFileName = "notes.json";
 const storageConfigFileName = "storage.json";
+const legacyUserDataFolderName = "lumina-notes";
+
+if (isDev) {
+  const devDataRoot = path.join(process.cwd(), ".electron-dev");
+  app.disableHardwareAcceleration();
+  app.setPath("userData", path.join(devDataRoot, "userData"));
+  app.setPath("sessionData", path.join(devDataRoot, "sessionData"));
+}
 
 type StoredNote = {
   id: string;
@@ -63,6 +71,58 @@ async function saveStorageConfig(config: StorageConfig) {
   const filePath = getStorageConfigPath();
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(config, null, 2), "utf8");
+}
+
+async function pathExists(targetPath: string) {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function migrateLegacyUserData() {
+  if (isDev) {
+    return;
+  }
+
+  const currentUserDataPath = app.getPath("userData");
+  const legacyUserDataPath = path.join(app.getPath("appData"), legacyUserDataFolderName);
+
+  if (currentUserDataPath === legacyUserDataPath) {
+    return;
+  }
+
+  const hasCurrentNotes = await pathExists(path.join(currentUserDataPath, notesFileName));
+  const hasCurrentStorageConfig = await pathExists(path.join(currentUserDataPath, storageConfigFileName));
+
+  if (hasCurrentNotes || hasCurrentStorageConfig) {
+    return;
+  }
+
+  const hasLegacyNotes = await pathExists(path.join(legacyUserDataPath, notesFileName));
+  const hasLegacyStorageConfig = await pathExists(path.join(legacyUserDataPath, storageConfigFileName));
+
+  if (!hasLegacyNotes && !hasLegacyStorageConfig) {
+    return;
+  }
+
+  await fs.mkdir(currentUserDataPath, { recursive: true });
+
+  if (hasLegacyNotes) {
+    await fs.copyFile(
+      path.join(legacyUserDataPath, notesFileName),
+      path.join(currentUserDataPath, notesFileName)
+    );
+  }
+
+  if (hasLegacyStorageConfig) {
+    await fs.copyFile(
+      path.join(legacyUserDataPath, storageConfigFileName),
+      path.join(currentUserDataPath, storageConfigFileName)
+    );
+  }
 }
 
 async function getNotesDirectoryPath() {
@@ -472,7 +532,13 @@ async function createWindow() {
   await window.loadFile(path.join(__dirname, "../dist/index.html"));
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  try {
+    await migrateLegacyUserData();
+  } catch (error) {
+    console.error("Failed to migrate legacy user data:", error);
+  }
+
   ipcMain.handle("notes:load", loadNotes);
   ipcMain.handle("notes:save", (_event, notes: StoredNote[]) => saveNotes(notes));
   ipcMain.handle("notes:getStorageInfo", getNotesStorageInfo);

@@ -34,7 +34,7 @@ export type AppTheme =
   | "fuchsia"
   | "can-can";
 export type NoteLayoutSize = "medium" | "full";
-export type ToolbarVisibilityKey = "history" | "headings" | "quote" | "lists" | "tables" | "bold" | "italic" | "strikethrough" | "code" | "underline" | "highlight" | "links" | "superscript" | "subscript" | "separator" | "textAlign" | "image";
+export type ToolbarVisibilityKey = "history" | "headings" | "quote" | "lists" | "tables" | "bold" | "italic" | "strikethrough" | "code" | "underline" | "highlight" | "links" | "superscript" | "subscript" | "separator" | "image";
 export type ToolbarVisibilityPreferences = Record<ToolbarVisibilityKey, boolean>;
 
 export type AppPreferences = {

@@ -150,3 +150,13 @@
   align-items: center;
   gap: 0.25rem;
 }
+
+.tiptap-dropdown-menu-item .tiptap-button {
+  font-weight: 400;
+}
+
+.tiptap-dropdown-menu-item .tiptap-button .tiptap-button-text,
+.tiptap-dropdown-menu-item .tiptap-button .tiptap-button-icon,
+.tiptap-dropdown-menu-item .tiptap-button .tiptap-button-icon-sub {
+  font-weight: 400;
+}

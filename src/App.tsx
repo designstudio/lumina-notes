@@ -8,6 +8,7 @@
   ChevronDown,
   ChevronRight,
   Code01,
+  CodeSquare01,
   CornerDownLeft,
   DotsHorizontal,
   Edit02,
@@ -29,25 +30,11 @@
   Trash03,
   Underline01,
 } from "@untitledui/icons";
-import Highlight from "@tiptap/extension-highlight";
-import Link from "@tiptap/extension-link";
-import TextAlign from "@tiptap/extension-text-align";
-import Placeholder from "@tiptap/extension-placeholder";
-import SubscriptExtension from "@tiptap/extension-subscript";
-import SuperscriptExtension from "@tiptap/extension-superscript";
-import TaskItem from "@tiptap/extension-task-item";
-import TaskList from "@tiptap/extension-task-list";
 import { lazy, Suspense, type DragEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Underline from "@tiptap/extension-underline";
-import { useEditor, useEditorState, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { TableKit } from "@tiptap/extension-table";
-import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import SimpleBar from "simplebar-react";
 import "simplebar-react/dist/simplebar.min.css";
-import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node";
 import {
   applyNoteDraftPatch,
   areNotesEqual,
@@ -74,13 +61,12 @@ import {
   type UiState,
   type WorkspaceView
 } from "./app-model";
-import { ImageExtension } from "./components/editor/image-tiptap";
+import { areNoteBodiesEquivalent, noteBodyToEditorContent } from "./components/editor/note-editor-helpers";
 import { getDefaultGetStartedNote, getDemoNotes, isDefaultGetStartedNote } from "./data";
 import { type EffectiveLanguage, type LanguagePreference, getLanguageOptions, resolveLanguage, translations } from "./i18n";
 import { FolderKey, Note } from "./types";
 import lophosNotesNaming from "../assets/lophos-notes-naming.svg";
 import appIcon from "../assets/icon.png";
-import { NoteEditorPane } from "./components/editor/NoteEditorPane";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { SidebarPane } from "./components/sidebar/SidebarPane";
 
@@ -89,6 +75,7 @@ const ClearDataModal = lazy(() => import("./components/modals/ClearDataModal").t
 const CreateFolderModal = lazy(() => import("./components/modals/CreateFolderModal").then((module) => ({ default: module.CreateFolderModal })));
 const DeleteFolderModal = lazy(() => import("./components/modals/DeleteFolderModal").then((module) => ({ default: module.DeleteFolderModal })));
 const DeleteNoteModal = lazy(() => import("./components/modals/DeleteNoteModal").then((module) => ({ default: module.DeleteNoteModal })));
+const NoteEditorSurface = lazy(() => import("./components/editor/NoteEditorSurface").then((module) => ({ default: module.NoteEditorSurface })));
 
 
 const fixedSections = [
@@ -110,28 +97,6 @@ const markdownConverter = new TurndownService({
   strongDelimiter: "**"
 });
 markdownConverter.use(gfm);
-
-const MAX_TIPTAP_UPLOAD_SIZE = 5 * 1024 * 1024;
-
-const emptyEditorUiState = {
-  canUndo: false,
-  canRedo: false,
-  currentTextAlign: "left" as "left" | "center" | "right",
-  isBlockquote: false,
-  isBulletList: false,
-  isOrderedList: false,
-  isTaskList: false,
-  isTable: false,
-  isBold: false,
-  isItalic: false,
-  isStrike: false,
-  isCode: false,
-  isUnderline: false,
-  isHighlight: false,
-  isLink: false,
-  isSuperscript: false,
-  isSubscript: false
-};
 
 type NoteContextMenuState = {
   noteId: string;
@@ -622,118 +587,6 @@ async function noteBodyToPdfHtml(body: string) {
 
   return document.body.innerHTML;
 }
-function noteBodyToEditorContent(body: string) {
-  if (!body.trim()) {
-    return "";
-  }
-
-  if (/<[a-z][\s\S]*>/i.test(body)) {
-    const documentFragment = new DOMParser().parseFromString(body, "text/html");
-
-    documentFragment.body.querySelectorAll("div").forEach((element) => {
-      const parent = element.parentNode;
-      if (!parent) {
-        return;
-      }
-
-      while (element.firstChild) {
-        parent.insertBefore(element.firstChild, element);
-      }
-
-      parent.removeChild(element);
-    });
-
-    return documentFragment.body.innerHTML;
-  }
-
-  return body
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
-    .join("");
-}
-
-function normalizeRenderedNoteBody(body: string) {
-  const normalizedBody = noteBodyToEditorContent(body);
-  if (!normalizedBody.trim()) {
-    return "";
-  }
-
-  const documentFragment = new DOMParser().parseFromString(normalizedBody, "text/html");
-  return documentFragment.body.innerHTML.trim();
-}
-
-function areNoteBodiesEquivalent(left: string, right: string) {
-  return normalizeRenderedNoteBody(left) === normalizeRenderedNoteBody(right);
-}
-
-function uploadImageAsDataUrl(
-  file: File,
-  onProgress?: (event: { progress: number }) => void,
-  abortSignal?: AbortSignal
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (file.size > MAX_TIPTAP_UPLOAD_SIZE) {
-      reject(new Error(`Image exceeds ${MAX_TIPTAP_UPLOAD_SIZE / 1024 / 1024}MB limit`));
-      return;
-    }
-
-    const reader = new FileReader();
-    let settled = false;
-
-    const cleanup = () => {
-      abortSignal?.removeEventListener("abort", handleAbort);
-    };
-
-    const settle = (callback: () => void) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      cleanup();
-      callback();
-    };
-
-    const handleAbort = () => {
-      try {
-        reader.abort();
-      } catch {
-      }
-
-      settle(() => reject(new Error("Image upload cancelled")));
-    };
-
-    reader.onprogress = (event) => {
-      if (!event.lengthComputable) {
-        return;
-      }
-
-      onProgress?.({ progress: Math.round((event.loaded / event.total) * 100) });
-    };
-
-    reader.onload = () => {
-      const result = reader.result;
-      settle(() => {
-        if (typeof result === "string") {
-          onProgress?.({ progress: 100 });
-          resolve(result);
-          return;
-        }
-
-        reject(new Error("Could not read image file"));
-      });
-    };
-
-    reader.onerror = () => {
-      settle(() => reject(new Error("Could not read image file")));
-    };
-
-    abortSignal?.addEventListener("abort", handleAbort, { once: true });
-    reader.readAsDataURL(file);
-  });
-}
-
-
 export default function App() {
   const initialAppPreferences = appPreferencesFromLocalStorage();
   const initialUiState = uiStateFromLocalStorage();
@@ -770,6 +623,7 @@ export default function App() {
   const [renamingNoteId, setRenamingNoteId] = useState<string | null>(null);
   const [renamingNoteTitle, setRenamingNoteTitle] = useState("");
   const [renamingSectionKey, setRenamingSectionKey] = useState<FolderKey | null>(null);
+  const [pendingTitleFocusNoteId, setPendingTitleFocusNoteId] = useState<string | null>(null);
   const [renamingFolderKey, setRenamingFolderKey] = useState<FolderKey | null>(null);
   const [renamingFolderLabel, setRenamingFolderLabel] = useState("");
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
@@ -831,14 +685,13 @@ export default function App() {
     { value: "bold", label: t.toolbarVisibilityBold, icon: <Bold01 size={16} /> },
     { value: "italic", label: t.toolbarVisibilityItalic, icon: <Italic01 size={16} /> },
     { value: "strikethrough", label: t.toolbarVisibilityStrikethrough, icon: <Strikethrough01 size={16} /> },
-    { value: "code", label: t.toolbarVisibilityCode, icon: <Code01 size={16} /> },
+    { value: "code", label: t.toolbarVisibilityCode, icon: <CodeSquare01 size={16} /> },
     { value: "underline", label: t.toolbarVisibilityUnderline, icon: <Underline01 size={16} /> },
     { value: "highlight", label: t.toolbarVisibilityHighlight, icon: <HighlightIcon /> },
     { value: "links", label: t.toolbarVisibilityLinks, icon: <Link01 size={16} /> },
     { value: "superscript", label: t.toolbarVisibilitySuperscript, icon: <SuperscriptIcon /> },
     { value: "subscript", label: t.toolbarVisibilitySubscript, icon: <SubscriptIcon /> },
     { value: "separator", label: t.toolbarVisibilitySeparator, icon: <SeparatorIcon /> },
-    { value: "textAlign", label: t.toolbarVisibilityTextAlign, icon: <AlignCenter size={16} /> },
     { value: "image", label: t.toolbarVisibilityImage, icon: <ImagePlus size={16} /> }
   ];
   const visibleToolbarGroupsCount = toolbarVisibilityOptions.filter((option) => appPreferences.toolbarVisibility[option.value]).length;
@@ -1309,164 +1162,27 @@ export default function App() {
     };
   }, [notes, storageReady]);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        horizontalRule: false
-      }),
-      TaskList,
-      TaskItem.configure({
-        nested: true
-      }),
-      TableKit.configure({
-        table: {
-          resizable: false,
-          renderWrapper: true,
-          HTMLAttributes: {
-            class: "editor-table"
-          }
-        },
-        tableHeader: {
-          HTMLAttributes: {
-            class: "editor-table-header"
-          }
-        },
-        tableCell: {
-          HTMLAttributes: {
-            class: "editor-table-cell"
-          }
-        }
-      }),
-      Underline,
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        linkOnPaste: true,
-        defaultProtocol: "https",
-        HTMLAttributes: {
-          target: "_blank",
-          rel: "noreferrer"
-        }
-      }),
-      SuperscriptExtension,
-      SubscriptExtension,
-      TextAlign.configure({
-        types: ["heading", "paragraph"]
-      }),
-      ImageExtension.configure({
-        allowBase64: true
-      }),
-      ImageUploadNode.configure({
-        accept: "image/*",
-        maxSize: MAX_TIPTAP_UPLOAD_SIZE,
-        limit: 1,
-        upload: uploadImageAsDataUrl,
-        onError: (error) => {
-          console.error("Could not upload image", error);
-        }
-      }),
-      HorizontalRule,
-      Highlight.configure({
-        multicolor: true
-      }),
-      Placeholder.configure({
-        placeholder: t.newNotePreview
-      })
-    ],
-    editable: true,
-    content: noteBodyToEditorContent(selectedNote?.body ?? ""),
-    editorProps: {
-      handleClick(_view, _pos, event) {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return false;
-        }
-
-        const anchor = target.closest("a[href]");
-        const href = anchor?.getAttribute("href");
-        if (!anchor || !href) {
-          return false;
-        }
-
-        event.preventDefault();
-
-        if (window.lumina?.system?.openExternal) {
-          void window.lumina.system.openExternal(href);
-          return true;
-        }
-
-        window.open(href, "_blank", "noopener,noreferrer");
-        return true;
-      },
-      attributes: {
-        class: "tiptap-editor",
-        "aria-label": t.editorBodyAria
-      }
-    },
-    onUpdate: ({ editor: activeEditor }) => {
-      if (activeEditor.isDestroyed || !storageReady || !hasLoadedInitialNotesRef.current) {
-        return;
-      }
-
-      const activeNote = draftNoteRef.current?.id === selectedNoteRef.current?.id ? draftNoteRef.current : selectedNoteRef.current;
-      if (!activeNote) {
-        return;
-      }
-
-      const nextBody = activeEditor.getHTML();
-      if (areNoteBodiesEquivalent(activeNote.body, nextBody)) {
-        return;
-      }
-
-      const nextDraft = applyNoteDraftPatch(activeNote, {
-        body: nextBody,
-        preview: activeEditor.getText().split("\n").find(Boolean)?.trim() || activeNote.title.trim() || t.emptyNote
-      }, t.emptyNote);
-
-      draftNoteRef.current = nextDraft;
-      dirtyDraftRef.current = true;
-      selectedNoteRef.current = nextDraft;
-      scheduleDraftCommit();
-      setIsActiveNoteDirty(true);
+  const handleEditorBodyChange = useCallback((nextBody: string, nextPreview: string) => {
+    if (!storageReady || !hasLoadedInitialNotesRef.current) {
+      return;
     }
-  }, [selectedNote?.id]);
 
-  const editorUiState = useEditorState({
-    editor,
-    selector: ({ editor: currentEditor }) => {
-      if (!currentEditor || currentEditor.isDestroyed) {
-        return emptyEditorUiState;
-      }
-
-      try {
-        const headingAttributes = currentEditor.getAttributes("heading") as { textAlign?: string } | undefined;
-        const paragraphAttributes = currentEditor.getAttributes("paragraph") as { textAlign?: string } | undefined;
-
-        return {
-          canUndo: currentEditor.can().undo(),
-          canRedo: currentEditor.can().redo(),
-          currentTextAlign: (headingAttributes?.textAlign ?? paragraphAttributes?.textAlign ?? "left") as "left" | "center" | "right",
-          isBlockquote: currentEditor.isActive("blockquote"),
-          isBulletList: currentEditor.isActive("bulletList"),
-          isOrderedList: currentEditor.isActive("orderedList"),
-          isTaskList: currentEditor.isActive("taskList"),
-          isTable: currentEditor.isActive("table"),
-          isBold: currentEditor.isActive("bold"),
-          isItalic: currentEditor.isActive("italic"),
-          isStrike: currentEditor.isActive("strike"),
-          isCode: currentEditor.isActive("code"),
-          isUnderline: currentEditor.isActive("underline"),
-          isHighlight: currentEditor.isActive("highlight"),
-          isLink: currentEditor.isActive("link"),
-          isSuperscript: currentEditor.isActive("superscript"),
-          isSubscript: currentEditor.isActive("subscript")
-        };
-      } catch {
-        return emptyEditorUiState;
-      }
+    const activeNote = draftNoteRef.current?.id === selectedNoteRef.current?.id ? draftNoteRef.current : selectedNoteRef.current;
+    if (!activeNote || areNoteBodiesEquivalent(activeNote.body, nextBody)) {
+      return;
     }
-  });
-  const currentTextAlign = editorUiState.currentTextAlign;
+
+    const nextDraft = applyNoteDraftPatch(activeNote, {
+      body: nextBody,
+      preview: nextPreview
+    }, t.emptyNote);
+
+    draftNoteRef.current = nextDraft;
+    dirtyDraftRef.current = true;
+    selectedNoteRef.current = nextDraft;
+    scheduleDraftCommit();
+    setIsActiveNoteDirty(true);
+  }, [storageReady, t.emptyNote]);
 
   useEffect(() => {
     if (selectedNote && selectedNote.id !== selectedId) {
@@ -1537,6 +1253,27 @@ export default function App() {
     textarea.style.height = "0px";
     textarea.style.height = `${textarea.scrollHeight + 4}px`;
   }, [selectedNote?.title]);
+
+  useEffect(() => {
+    if (!pendingTitleFocusNoteId || selectedNote?.id !== pendingTitleFocusNoteId) {
+      return;
+    }
+
+    const textarea = titleRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.select();
+      setPendingTitleFocusNoteId(null);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [pendingTitleFocusNoteId, selectedNote?.id]);
 
   useEffect(() => {
     if (!renamingNoteId) {
@@ -1631,48 +1368,6 @@ export default function App() {
   }, [storageReady]);
 
   useEffect(() => {
-    if (!editor || editor.isDestroyed || !selectedNote) {
-      return;
-    }
-
-    if (dirtyDraftRef.current && draftNoteRef.current?.id === selectedNote.id) {
-      return;
-    }
-
-    const nextContent = noteBodyToEditorContent(selectedNote.body);
-    if (editor.isDestroyed) {
-      return;
-    }
-
-    const currentContent = editor.getHTML();
-    if (currentContent === nextContent || areNoteBodiesEquivalent(currentContent, nextContent)) {
-      return;
-    }
-
-    try {
-      editor.chain().setMeta("addToHistory", false).setContent(nextContent, { emitUpdate: false }).run();
-    } catch (error) {
-      console.error("Could not hydrate editor content", error);
-
-      const fallbackDocument = new DOMParser().parseFromString(nextContent, "text/html");
-      const fallbackText = fallbackDocument.body.textContent?.trim() ?? "";
-      const fallbackContent = fallbackText
-        ? fallbackText
-            .split(/\n{2,}/)
-            .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
-            .join("")
-        : "";
-
-      try {
-        editor.chain().setMeta("addToHistory", false).setContent(fallbackContent, { emitUpdate: false }).run();
-      } catch (fallbackError) {
-        console.error("Could not hydrate fallback editor content", fallbackError);
-        editor.chain().setMeta("addToHistory", false).clearContent(false).run();
-      }
-    }
-  }, [editor, selectedNote?.id, selectedNote?.body]);
-
-  useEffect(() => {
     modalVisibilityRef.current = {
       search: isSearchModalOpen || closingModals.search,
       "clear-data": isClearDataModalOpen || closingModals["clear-data"],
@@ -1699,6 +1394,12 @@ export default function App() {
     }
 
     function handleEscape(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        openSearchModal();
+        return;
+      }
+
       if (event.key === "Escape") {
         closeFloatingMenus();
         cancelRenamingNote();
@@ -1907,6 +1608,7 @@ export default function App() {
     setNotes((current) => [...current, note]);
     setSelectedId(note.id);
     setActiveFolder("all");
+    setPendingTitleFocusNoteId(note.id);
   }
   function addNewNoteToFolder(folderKey: FolderKey) {
     setWorkspaceView("notes");
@@ -1924,9 +1626,7 @@ export default function App() {
     }));
     setSelectedId(note.id);
     setActiveFolder(folderKey);
-    setRenamingNoteId(note.id);
-    setRenamingSectionKey(folderKey);
-    setRenamingNoteTitle(note.title);
+    setPendingTitleFocusNoteId(note.id);
   }
 
 
@@ -2426,11 +2126,6 @@ export default function App() {
     }
   }
 
-  function runTableCommand(command: () => void) {
-    command();
-    setToolbarMenu(null);
-  }
-
   function showSidebarTooltipFor(label: string, button: HTMLElement | null) {
     if (!button) {
       return;
@@ -2557,43 +2252,63 @@ export default function App() {
               onOpenClearDataModal={openClearDataModal}
             />
           ) : selectedNote ? (
-            <NoteEditorPane
-              selectedNote={selectedNote}
-              resolvedLanguage={resolvedLanguage}
-              t={t}
-              toolbarVisibility={appPreferences.toolbarVisibility}
-              toolbarMenu={toolbarMenu}
-              editor={editor}
-              editorUiState={editorUiState}
-              titleRef={titleRef}
-              noteHeaderMenuButtonRef={noteHeaderMenuButtonRef}
-              isNoteActionsMenuOpen={isNoteActionsMenuOpen}
-              folderLabel={folderLabel}
-              formatCreatedAtLabel={formatCreatedAtLabel}
-              setToolbarMenu={setToolbarMenu}
-              onToggleNoteActionsMenu={(event) => {
-                event.stopPropagation();
+            <Suspense
+              fallback={(
+                <section className="editor-surface editor-surface-loading">
+                  <nav className="breadcrumb" aria-label={t.breadcrumbAria}>
+                    <span className="breadcrumb-path">
+                      <span className="breadcrumb-folder">{folderLabel(selectedNote.folder)}</span>
+                      <span className="breadcrumb-separator">/</span>
+                      <span className="breadcrumb-note">{selectedNote.title ?? t.welcomeNoteFallback}</span>
+                    </span>
+                  </nav>
+                  <div className="editor-header">
+                    <textarea ref={titleRef} className="editor-title" value={selectedNote.title} readOnly rows={1} />
+                  </div>
+                  <div className="editor-body">
+                    <div className="editor-loading-placeholder">Carregando editor...</div>
+                  </div>
+                </section>
+              )}
+            >
+              <NoteEditorSurface
+                selectedNote={selectedNote}
+                resolvedLanguage={resolvedLanguage}
+                t={t}
+                toolbarVisibility={appPreferences.toolbarVisibility}
+                toolbarMenu={toolbarMenu}
+                storageReady={storageReady}
+                hasLoadedInitialNotes={hasLoadedInitialNotesRef.current}
+                titleRef={titleRef}
+                noteHeaderMenuButtonRef={noteHeaderMenuButtonRef}
+                isNoteActionsMenuOpen={isNoteActionsMenuOpen}
+                folderLabel={folderLabel}
+                formatCreatedAtLabel={formatCreatedAtLabel}
+                setToolbarMenu={setToolbarMenu}
+                onToggleNoteActionsMenu={(event) => {
+                  event.stopPropagation();
 
-                if (isNoteActionsMenuOpen) {
-                  setIsNoteActionsMenuOpen(false);
-                  setNoteActionsMenuPosition(null);
-                  return;
-                }
+                  if (isNoteActionsMenuOpen) {
+                    setIsNoteActionsMenuOpen(false);
+                    setNoteActionsMenuPosition(null);
+                    return;
+                  }
 
-                const buttonRect = noteHeaderMenuButtonRef.current?.getBoundingClientRect();
-                if (!buttonRect) {
-                  return;
-                }
+                  const buttonRect = noteHeaderMenuButtonRef.current?.getBoundingClientRect();
+                  if (!buttonRect) {
+                    return;
+                  }
 
-                setIsNoteActionsMenuOpen(true);
-                setNoteActionsMenuPosition({
-                  x: Math.max(CONTEXT_MENU_VIEWPORT_GAP, buttonRect.right - 188),
-                  y: buttonRect.bottom + 8
-                });
-              }}
-              onTitleChange={(value) => updateNote({ title: value })}
-              runTableCommand={runTableCommand}
-            />
+                  setIsNoteActionsMenuOpen(true);
+                  setNoteActionsMenuPosition({
+                    x: Math.max(CONTEXT_MENU_VIEWPORT_GAP, buttonRect.right - 188),
+                    y: buttonRect.bottom + 8
+                  });
+                }}
+                onTitleChange={(value) => updateNote({ title: value })}
+                onBodyChange={handleEditorBodyChange}
+              />
+            </Suspense>
           ) : null}
         </SimpleBar>
 

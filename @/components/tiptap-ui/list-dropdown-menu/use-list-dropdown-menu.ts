@@ -41,6 +41,10 @@ export interface UseListDropdownMenuConfig {
    * @default false
    */
   hideWhenUnavailable?: boolean
+  /**
+   * Optional translated labels for each list type.
+   */
+  labels?: Partial<Record<ListType, string>>
 }
 
 export interface ListOption {
@@ -84,11 +88,15 @@ export function isAnyListActive(
 }
 
 export function getFilteredListOptions(
-  availableTypes: ListType[]
+  availableTypes: ListType[],
+  labels?: Partial<Record<ListType, string>>
 ): typeof listOptions {
-  return listOptions.filter(
-    (option) => !option.type || availableTypes.includes(option.type)
-  )
+  return listOptions
+    .filter((option) => !option.type || availableTypes.includes(option.type))
+    .map((option) => ({
+      ...option,
+      label: labels?.[option.type] ?? option.label,
+    }))
 }
 
 export function shouldShowListDropdown(params: {
@@ -170,6 +178,7 @@ export function useListDropdownMenu(config?: UseListDropdownMenuConfig) {
     editor: providedEditor,
     types = ["bulletList", "orderedList", "taskList"],
     hideWhenUnavailable = false,
+    labels,
   } = config || {}
 
   const { editor } = useTiptapEditor(providedEditor)
@@ -177,7 +186,7 @@ export function useListDropdownMenu(config?: UseListDropdownMenuConfig) {
 
   const listInSchema = types.some((type) => isNodeInSchema(type, editor))
 
-  const filteredLists = useMemo(() => getFilteredListOptions(types), [types])
+  const filteredLists = useMemo(() => getFilteredListOptions(types, labels), [labels, types])
 
   const canToggleAny = canToggleAnyList(editor, types)
   const isAnyActive = isAnyListActive(editor, types)

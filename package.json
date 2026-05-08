@@ -1,6 +1,6 @@
 {
-  "name": "lumina-notes",
-  "version": "0.2.0",
+  "name": "lophos-notes",
+  "version": "0.2.1",
   "private": true,
   "description": "A polished desktop notes app inspired by Apple Notes and Soba.",
   "main": "dist-electron/main.js",
@@ -14,7 +14,7 @@
     "preview": "vite preview"
   },
   "build": {
-    "appId": "com.lumina.notes",
+    "appId": "com.lophos.notes",
     "productName": "Lophos Notes",
     "directories": {
       "output": "release"
@@ -80,6 +80,7 @@
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
+    "@vitejs/plugin-react-swc": "^4.3.0",
     "class-variance-authority": "^0.7.1",
     "concurrently": "^9.1.2",
     "electron": "^36.2.1",

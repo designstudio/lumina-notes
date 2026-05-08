@@ -57,6 +57,14 @@
   background: #ffffff;
 }
 
+html[data-note-layout="medium"] {
+  --editor-max-width: 680px;
+}
+
+html[data-note-layout="full"] {
+  --editor-max-width: none;
+}
+
 html[data-color-theme="blue-lagoon"] {
   --theme-accent: #2563eb;
   --theme-accent-strong: #1d4ed8;
@@ -512,8 +520,8 @@ button {
 }
 
 .sidebar-section-drop-target > .sidebar-section-trigger {
-  background: #eef4ff;
-  color: #12325f;
+  background: #f3f3f3;
+  color: inherit;
 }
 
 .sidebar-section-trigger {
@@ -942,6 +950,46 @@ button {
   border-bottom: 1px solid #f1f1f1;
 }
 
+.markdown-toolbar-loading {
+  gap: 10px;
+}
+
+.toolbar-loading-group {
+  height: 28px;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.05) 0%,
+      rgba(0, 0, 0, 0.075) 50%,
+      rgba(0, 0, 0, 0.05) 100%
+    );
+  background-size: 200% 100%;
+  animation: toolbar-loading-shimmer 1.2s ease-in-out infinite;
+}
+
+.toolbar-loading-group-sm {
+  width: 68px;
+}
+
+.toolbar-loading-group-md {
+  width: 96px;
+}
+
+.toolbar-loading-group-lg {
+  width: 132px;
+}
+
+@keyframes toolbar-loading-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 .toolbar-group {
   position: relative;
   min-height: 34px;
@@ -970,6 +1018,52 @@ button {
   border-radius: 0.75rem;
   color: #333333;
   transition: background-color 140ms ease, color 140ms ease;
+}
+
+.markdown-toolbar .tiptap-button {
+  --tt-button-hover-bg-color: var(--theme-accent-soft);
+  --tt-button-hover-text-color: var(--theme-accent-muted-text);
+  --tt-button-hover-icon-color: var(--theme-accent-muted-text);
+  --tt-button-hover-icon-sub-color: var(--theme-accent-muted-text);
+  --tt-button-hover-dropdown-arrows-color: var(--theme-accent-muted-text);
+  --tt-button-active-bg-color: var(--theme-accent-soft);
+  --tt-button-active-text-color: var(--theme-accent-muted-text);
+  --tt-button-active-icon-color: var(--theme-accent-muted-text);
+  --tt-button-active-icon-sub-color: var(--theme-accent-muted-text);
+  --tt-button-active-dropdown-arrows-color: var(--theme-accent-muted-text);
+  --tt-button-active-hover-bg-color: var(--theme-accent-soft-strong);
+}
+
+.markdown-toolbar .tiptap-button:hover:not([disabled]),
+.markdown-toolbar .tiptap-button[data-active-item="true"]:not([disabled]),
+.markdown-toolbar .tiptap-button[data-highlighted]:not([disabled]):not([data-highlighted="false"]),
+.markdown-toolbar .tiptap-button[data-active-state="on"]:not([disabled]),
+.markdown-toolbar .tiptap-button[data-state="open"]:not([disabled]) {
+  background: var(--theme-accent-soft) !important;
+  color: var(--theme-accent-muted-text) !important;
+}
+
+.markdown-toolbar .tiptap-button:hover:not([disabled]) .tiptap-button-icon,
+.markdown-toolbar .tiptap-button:hover:not([disabled]) .tiptap-button-icon-sub,
+.markdown-toolbar .tiptap-button:hover:not([disabled]) .tiptap-button-dropdown-arrows,
+.markdown-toolbar .tiptap-button:hover:not([disabled]) .tiptap-button-dropdown-small,
+.markdown-toolbar .tiptap-button[data-active-item="true"]:not([disabled]) .tiptap-button-icon,
+.markdown-toolbar .tiptap-button[data-active-item="true"]:not([disabled]) .tiptap-button-icon-sub,
+.markdown-toolbar .tiptap-button[data-active-item="true"]:not([disabled]) .tiptap-button-dropdown-arrows,
+.markdown-toolbar .tiptap-button[data-active-item="true"]:not([disabled]) .tiptap-button-dropdown-small,
+.markdown-toolbar .tiptap-button[data-highlighted]:not([disabled]):not([data-highlighted="false"]) .tiptap-button-icon,
+.markdown-toolbar .tiptap-button[data-highlighted]:not([disabled]):not([data-highlighted="false"]) .tiptap-button-icon-sub,
+.markdown-toolbar .tiptap-button[data-highlighted]:not([disabled]):not([data-highlighted="false"]) .tiptap-button-dropdown-arrows,
+.markdown-toolbar .tiptap-button[data-highlighted]:not([disabled]):not([data-highlighted="false"]) .tiptap-button-dropdown-small,
+.markdown-toolbar .tiptap-button[data-active-state="on"]:not([disabled]) .tiptap-button-icon,
+.markdown-toolbar .tiptap-button[data-active-state="on"]:not([disabled]) .tiptap-button-icon-sub,
+.markdown-toolbar .tiptap-button[data-active-state="on"]:not([disabled]) .tiptap-button-dropdown-arrows,
+.markdown-toolbar .tiptap-button[data-active-state="on"]:not([disabled]) .tiptap-button-dropdown-small,
+.markdown-toolbar .tiptap-button[data-state="open"]:not([disabled]) .tiptap-button-icon,
+.markdown-toolbar .tiptap-button[data-state="open"]:not([disabled]) .tiptap-button-icon-sub,
+.markdown-toolbar .tiptap-button[data-state="open"]:not([disabled]) .tiptap-button-dropdown-arrows,
+.markdown-toolbar .tiptap-button[data-state="open"]:not([disabled]) .tiptap-button-dropdown-small {
+  color: var(--theme-accent-muted-text) !important;
 }
 
 .markdown-toolbar button:hover,
@@ -1122,52 +1216,102 @@ button {
 
 .markdown-toolbar .toolbar-menu-trigger {
   width: auto;
-  min-width: 48px;
-  gap: 4px;
-  padding: 0 8px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0 4px 0 8px;
+}
+
+.markdown-toolbar .toolbar-menu-trigger svg:first-child {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.markdown-toolbar .toolbar-menu-trigger svg:last-child {
+  width: 0.625rem;
+  height: 0.625rem;
+  flex: 0 0 auto;
 }
 
 .toolbar-popover {
   position: absolute;
   top: calc(100% + 8px);
-  left: 50%;
+  left: 0;
   z-index: 40;
-  min-width: 152px;
+  min-width: 188px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 10px;
-  border: 1px solid #f0f0f0;
+  gap: 0;
+  padding: 0.375rem;
+  border: 0;
   border-radius: 16px;
   background: #ffffff;
-  box-shadow: 0 20px 44px rgba(15, 15, 15, 0.13);
-  transform: translateX(-50%);
-  transform-origin: top center;
+  box-shadow: 0 18px 40px rgba(15, 15, 15, 0.13);
+  transform-origin: top left;
   animation: toolbar-popover-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toolbar-popover.closing {
+  animation: toolbar-popover-out 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes toolbar-popover-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-8px) scale(0.98);
+    transform: translateY(-8px) scale(0.98);
   }
 
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toolbar-popover-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
   }
 }
 
 .markdown-toolbar .toolbar-popover button {
   width: 100%;
-  height: 32px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
   justify-content: flex-start;
   gap: 9px;
-  padding: 0 9px;
+  padding: 8px 9px;
   border-radius: 10px;
   color: #5f6368;
   font-size: 13px;
+  line-height: 1.2;
   text-align: left;
+}
+
+.markdown-toolbar .toolbar-popover button span {
+  display: inline-flex;
+  align-items: center;
+  white-space: normal;
+}
+
+.markdown-toolbar .toolbar-popover button svg {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.table-popover {
+  min-width: 220px;
+  max-width: 220px;
 }
 
 .toolbar-popover strong {
@@ -1185,6 +1329,7 @@ button {
 
 .toolbar-popover span {
   font-size: 13px;
+  line-height: 1.2;
 }
 
 .list-popover {
@@ -1192,7 +1337,16 @@ button {
 }
 
 .table-popover {
-  min-width: 188px;
+  min-width: 220px;
+}
+
+.table-popover button span {
+  white-space: nowrap;
+}
+
+.markdown-toolbar .table-popover button:hover {
+  background: var(--tt-gray-light-200);
+  color: var(--tt-gray-light-a-900);
 }
 
 .list-popover svg {
@@ -1319,6 +1473,14 @@ button {
 .editor-body {
   width: 100%;
   min-height: 520px;
+}
+
+.editor-loading-placeholder {
+  display: flex;
+  align-items: center;
+  min-height: 220px;
+  color: #8a9099;
+  font-size: 14px;
 }
 
 .tiptap-editor {
@@ -2613,6 +2775,17 @@ html[data-theme="dark"] .markdown-toolbar button {
   color: #a1a1aa;
 }
 
+html[data-theme="dark"] .toolbar-loading-group {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(255, 255, 255, 0.14) 50%,
+      rgba(255, 255, 255, 0.08) 100%
+    );
+  background-size: 200% 100%;
+}
+
 html[data-theme="dark"] .markdown-toolbar button:hover,
 html[data-theme="dark"] .markdown-toolbar button.active {
   background: var(--theme-accent-soft);
@@ -2654,7 +2827,13 @@ html[data-theme="dark"] .toolbar-popover button:hover,
 html[data-theme="dark"] .settings-select-option:hover,
 html[data-theme="dark"] .settings-select-option.active,
 html[data-theme="dark"] .note-context-menu-item:hover {
-  background: #21232a;
+  background: var(--theme-accent-soft);
+  color: var(--theme-accent-muted-text);
+}
+
+html[data-theme="dark"] .markdown-toolbar .table-popover button:hover {
+  background: var(--tt-gray-dark-200);
+  color: var(--tt-gray-dark-a-900);
 }
 
 html[data-theme="dark"] .image-aligner-menu {
