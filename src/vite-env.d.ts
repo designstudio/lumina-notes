@@ -10,6 +10,9 @@ type LuminaApi = {
   window?: {
     setAppearance: (appearance: "light" | "dark") => Promise<void>;
   };
+  system?: {
+    openExternal: (url: string) => Promise<boolean>;
+  };
   notes?: {
     load: () => Promise<Note[] | null>;
     save: (notes: Note[]) => Promise<void>;

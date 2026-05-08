@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld("lumina", {
   window: {
     setAppearance: (appearance: "light" | "dark") => ipcRenderer.invoke("window:setAppearance", appearance) as Promise<void>
   },
+  system: {
+    openExternal: (url: string) => ipcRenderer.invoke("system:openExternal", url) as Promise<boolean>
+  },
   notes: {
     load: () => ipcRenderer.invoke("notes:load"),
     save: (notes: unknown[]) => ipcRenderer.invoke("notes:save", notes),

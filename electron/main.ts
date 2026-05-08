@@ -29,6 +29,15 @@ type StorageConfig = {
 
 type AppearanceMode = "light" | "dark";
 
+function isSafeExternalUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:", "mailto:"].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
 function getDefaultNotesDirectoryPath() {
   return app.getPath("userData");
 }
@@ -431,6 +440,23 @@ async function createWindow() {
 
   syncWindowAppearance(window, "light");
 
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
+
+    return { action: "deny" };
+  });
+
+  window.webContents.on("will-navigate", (event, url) => {
+    if (!isSafeExternalUrl(url)) {
+      return;
+    }
+
+    event.preventDefault();
+    void shell.openExternal(url);
+  });
+
 
   if (isDev && rendererEntry) {
     const isReady = await waitForFile(rendererEntry);
@@ -469,6 +495,14 @@ app.whenReady().then(() => {
     if (window) {
       syncWindowAppearance(window, appearance);
     }
+  });
+  ipcMain.handle("system:openExternal", (_event, url: string) => {
+    if (!isSafeExternalUrl(url)) {
+      return false;
+    }
+
+    void shell.openExternal(url);
+    return true;
   });
   ipcMain.handle("images:pick", pickImageFile);
   ipcMain.handle("app:getVersion", () => app.getVersion());

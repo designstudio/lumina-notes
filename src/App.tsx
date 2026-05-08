@@ -30,7 +30,6 @@
   Underline01,
 } from "@untitledui/icons";
 import Highlight from "@tiptap/extension-highlight";
-import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -43,10 +42,12 @@ import Underline from "@tiptap/extension-underline";
 import { useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TableKit } from "@tiptap/extension-table";
+import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import SimpleBar from "simplebar-react";
 import "simplebar-react/dist/simplebar.min.css";
+import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node";
 import {
   applyNoteDraftPatch,
   areNotesEqual,
@@ -73,6 +74,7 @@ import {
   type UiState,
   type WorkspaceView
 } from "./app-model";
+import { ImageExtension } from "./components/editor/image-tiptap";
 import { getDefaultGetStartedNote, getDemoNotes, isDefaultGetStartedNote } from "./data";
 import { type EffectiveLanguage, type LanguagePreference, getLanguageOptions, resolveLanguage, translations } from "./i18n";
 import { FolderKey, Note } from "./types";
@@ -108,6 +110,28 @@ const markdownConverter = new TurndownService({
   strongDelimiter: "**"
 });
 markdownConverter.use(gfm);
+
+const MAX_TIPTAP_UPLOAD_SIZE = 5 * 1024 * 1024;
+
+const emptyEditorUiState = {
+  canUndo: false,
+  canRedo: false,
+  currentTextAlign: "left" as "left" | "center" | "right",
+  isBlockquote: false,
+  isBulletList: false,
+  isOrderedList: false,
+  isTaskList: false,
+  isTable: false,
+  isBold: false,
+  isItalic: false,
+  isStrike: false,
+  isCode: false,
+  isUnderline: false,
+  isHighlight: false,
+  isLink: false,
+  isSuperscript: false,
+  isSubscript: false
+};
 
 type NoteContextMenuState = {
   noteId: string;
@@ -224,6 +248,18 @@ function notesFromLocalStorage() {
   } catch {
     return null;
   }
+}
+
+function initialNotesState(locale: EffectiveLanguage) {
+  const defaultNotes = ensureDefaultNotes(withSortOrder(getDemoNotes(locale)));
+
+  // In Electron, the notes file is the durable source of truth.
+  // Booting from localStorage can resurrect stale drafts before the file loads.
+  if (window.lumina?.notes) {
+    return defaultNotes;
+  }
+
+  return notesFromLocalStorage() ?? defaultNotes;
 }
 
 
@@ -616,19 +652,99 @@ function noteBodyToEditorContent(body: string) {
     .join("");
 }
 
+function normalizeRenderedNoteBody(body: string) {
+  const normalizedBody = noteBodyToEditorContent(body);
+  if (!normalizedBody.trim()) {
+    return "";
+  }
+
+  const documentFragment = new DOMParser().parseFromString(normalizedBody, "text/html");
+  return documentFragment.body.innerHTML.trim();
+}
+
+function areNoteBodiesEquivalent(left: string, right: string) {
+  return normalizeRenderedNoteBody(left) === normalizeRenderedNoteBody(right);
+}
+
+function uploadImageAsDataUrl(
+  file: File,
+  onProgress?: (event: { progress: number }) => void,
+  abortSignal?: AbortSignal
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.size > MAX_TIPTAP_UPLOAD_SIZE) {
+      reject(new Error(`Image exceeds ${MAX_TIPTAP_UPLOAD_SIZE / 1024 / 1024}MB limit`));
+      return;
+    }
+
+    const reader = new FileReader();
+    let settled = false;
+
+    const cleanup = () => {
+      abortSignal?.removeEventListener("abort", handleAbort);
+    };
+
+    const settle = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const handleAbort = () => {
+      try {
+        reader.abort();
+      } catch {
+      }
+
+      settle(() => reject(new Error("Image upload cancelled")));
+    };
+
+    reader.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+
+      onProgress?.({ progress: Math.round((event.loaded / event.total) * 100) });
+    };
+
+    reader.onload = () => {
+      const result = reader.result;
+      settle(() => {
+        if (typeof result === "string") {
+          onProgress?.({ progress: 100 });
+          resolve(result);
+          return;
+        }
+
+        reject(new Error("Could not read image file"));
+      });
+    };
+
+    reader.onerror = () => {
+      settle(() => reject(new Error("Could not read image file")));
+    };
+
+    abortSignal?.addEventListener("abort", handleAbort, { once: true });
+    reader.readAsDataURL(file);
+  });
+}
+
 
 export default function App() {
   const initialAppPreferences = appPreferencesFromLocalStorage();
   const initialUiState = uiStateFromLocalStorage();
   const initialLanguage = resolveLanguage(initialAppPreferences.language, window.navigator.language);
-  const [notes, setNotes] = useState<Note[]>(() => normalizeDefaultNotes(notesFromLocalStorage() ?? ensureDefaultNotes(withSortOrder(getDemoNotes(initialLanguage))), initialLanguage));
+  const [notes, setNotes] = useState<Note[]>(() => normalizeDefaultNotes(initialNotesState(initialLanguage), initialLanguage));
   const [storageReady, setStorageReady] = useState(!window.lumina?.notes);
   const [activeFolder, setActiveFolder] = useState<FolderKey>(initialUiState.activeFolder);
   const [selectedId, setSelectedId] = useState(initialUiState.selectedNoteId || notes[0]?.id || "");
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("notes");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialUiState.sidebarCollapsed);
   const [toolbarMenu, setToolbarMenu] = useState<ToolbarMenu>(null);
-  const [linkInput, setLinkInput] = useState("");
   const [folderSettings, setFolderSettings] = useState<FolderSettings>(() => folderSettingsFromLocalStorage());
   const [appPreferences, setAppPreferences] = useState<AppPreferences>(initialAppPreferences);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(initialUiState.expandedSections);
@@ -638,7 +754,6 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceScrollRef = useRef<HTMLElement | null>(null);
   const sidebarCollapseRef = useRef<HTMLButtonElement | null>(null);
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const noteHeaderMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const modalCloseTimeoutsRef = useRef<Partial<Record<ModalKey, number>>>({});
   const modalVisibilityRef = useRef<Record<ModalKey, boolean>>({ search: false, "clear-data": false, "create-folder": false, "delete-folder": false, "delete-note": false });
@@ -695,6 +810,7 @@ export default function App() {
   const selectedNoteRef = useRef<Note | undefined>(undefined);
   const draftNoteRef = useRef<Note | null>(notes[0] ?? null);
   const dirtyDraftRef = useRef(false);
+  const hasLoadedInitialNotesRef = useRef(!window.lumina?.notes);
   const draftCommitTimeoutRef = useRef<number | null>(null);
   const previousSelectedIdRef = useRef(selectedId);
   const resolvedAppearance = appPreferences.appearance === "system" ? (systemPrefersDark ? "dark" : "light") : appPreferences.appearance;
@@ -776,15 +892,20 @@ export default function App() {
         }
 
         const nextNotes = normalizeDefaultNotes(
-          storedNotes?.length ? ensureDefaultNotes(withSortOrder(storedNotes)) : notesFromLocalStorage() ?? ensureDefaultNotes(withSortOrder(getDemoNotes(initialLanguage))),
+          storedNotes?.length ? ensureDefaultNotes(withSortOrder(storedNotes)) : ensureDefaultNotes(withSortOrder(getDemoNotes(initialLanguage))),
           resolveLanguage(appPreferencesFromLocalStorage().language, window.navigator.language)
         );
         setNotes(nextNotes);
         setSelectedId(nextNotes[0]?.id ?? "");
+        setActiveNoteDraft(nextNotes[0] ?? null);
+        draftNoteRef.current = nextNotes[0] ?? null;
+        dirtyDraftRef.current = false;
+        setIsActiveNoteDirty(false);
       } catch (error) {
         console.error("Could not load local notes", error);
       } finally {
         if (isMounted) {
+          hasLoadedInitialNotesRef.current = true;
           setStorageReady(true);
         }
       }
@@ -1041,6 +1162,10 @@ export default function App() {
     groupedNotes.set("all", sortedNotes);
 
     for (const note of sortedNotes) {
+      if (note.folder === "all") {
+        continue;
+      }
+
       const bucket = groupedNotes.get(note.folder);
       if (bucket) {
         bucket.push(note);
@@ -1141,6 +1266,11 @@ export default function App() {
   }
 
   function commitPendingDraftToNotes() {
+    if (!storageReady || !hasLoadedInitialNotesRef.current) {
+      clearDraftCommitTimeout();
+      return;
+    }
+
     const pendingDraft = draftNoteRef.current;
     if (!dirtyDraftRef.current || !pendingDraft) {
       clearDraftCommitTimeout();
@@ -1155,6 +1285,10 @@ export default function App() {
   }
 
   function scheduleDraftCommit() {
+    if (!storageReady || !hasLoadedInitialNotesRef.current) {
+      return;
+    }
+
     clearDraftCommitTimeout();
     draftCommitTimeoutRef.current = window.setTimeout(() => {
       commitPendingDraftToNotes();
@@ -1177,7 +1311,9 @@ export default function App() {
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        horizontalRule: false
+      }),
       TaskList,
       TaskItem.configure({
         nested: true
@@ -1203,7 +1339,7 @@ export default function App() {
       }),
       Underline,
       Link.configure({
-        openOnClick: true,
+        openOnClick: false,
         autolink: true,
         linkOnPaste: true,
         defaultProtocol: "https",
@@ -1217,9 +1353,19 @@ export default function App() {
       TextAlign.configure({
         types: ["heading", "paragraph"]
       }),
-      Image.configure({
+      ImageExtension.configure({
         allowBase64: true
       }),
+      ImageUploadNode.configure({
+        accept: "image/*",
+        maxSize: MAX_TIPTAP_UPLOAD_SIZE,
+        limit: 1,
+        upload: uploadImageAsDataUrl,
+        onError: (error) => {
+          console.error("Could not upload image", error);
+        }
+      }),
+      HorizontalRule,
       Highlight.configure({
         multicolor: true
       }),
@@ -1227,23 +1373,53 @@ export default function App() {
         placeholder: t.newNotePreview
       })
     ],
-    content: "",
-    immediatelyRender: true,
-    shouldRerenderOnTransaction: false,
+    editable: true,
+    content: noteBodyToEditorContent(selectedNote?.body ?? ""),
     editorProps: {
+      handleClick(_view, _pos, event) {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return false;
+        }
+
+        const anchor = target.closest("a[href]");
+        const href = anchor?.getAttribute("href");
+        if (!anchor || !href) {
+          return false;
+        }
+
+        event.preventDefault();
+
+        if (window.lumina?.system?.openExternal) {
+          void window.lumina.system.openExternal(href);
+          return true;
+        }
+
+        window.open(href, "_blank", "noopener,noreferrer");
+        return true;
+      },
       attributes: {
         class: "tiptap-editor",
         "aria-label": t.editorBodyAria
       }
     },
     onUpdate: ({ editor: activeEditor }) => {
+      if (activeEditor.isDestroyed || !storageReady || !hasLoadedInitialNotesRef.current) {
+        return;
+      }
+
       const activeNote = draftNoteRef.current?.id === selectedNoteRef.current?.id ? draftNoteRef.current : selectedNoteRef.current;
       if (!activeNote) {
         return;
       }
 
+      const nextBody = activeEditor.getHTML();
+      if (areNoteBodiesEquivalent(activeNote.body, nextBody)) {
+        return;
+      }
+
       const nextDraft = applyNoteDraftPatch(activeNote, {
-        body: activeEditor.getHTML(),
+        body: nextBody,
         preview: activeEditor.getText().split("\n").find(Boolean)?.trim() || activeNote.title.trim() || t.emptyNote
       }, t.emptyNote);
 
@@ -1253,55 +1429,41 @@ export default function App() {
       scheduleDraftCommit();
       setIsActiveNoteDirty(true);
     }
-  }, [selectedNote?.id, resolvedLanguage]);
+  }, [selectedNote?.id]);
 
   const editorUiState = useEditorState({
     editor,
     selector: ({ editor: currentEditor }) => {
-      if (!currentEditor) {
-        return {
-          canUndo: false,
-          canRedo: false,
-          currentTextAlign: "left" as "left" | "center" | "right",
-          isBlockquote: false,
-          isBulletList: false,
-          isOrderedList: false,
-          isTaskList: false,
-          isTable: false,
-          isBold: false,
-          isItalic: false,
-          isStrike: false,
-          isCode: false,
-          isUnderline: false,
-          isHighlight: false,
-          isLink: false,
-          isSuperscript: false,
-          isSubscript: false
-        };
+      if (!currentEditor || currentEditor.isDestroyed) {
+        return emptyEditorUiState;
       }
 
-      const headingAttributes = currentEditor.getAttributes("heading") as { textAlign?: string } | undefined;
-      const paragraphAttributes = currentEditor.getAttributes("paragraph") as { textAlign?: string } | undefined;
+      try {
+        const headingAttributes = currentEditor.getAttributes("heading") as { textAlign?: string } | undefined;
+        const paragraphAttributes = currentEditor.getAttributes("paragraph") as { textAlign?: string } | undefined;
 
-      return {
-        canUndo: currentEditor.can().undo(),
-        canRedo: currentEditor.can().redo(),
-        currentTextAlign: (headingAttributes?.textAlign ?? paragraphAttributes?.textAlign ?? "left") as "left" | "center" | "right",
-        isBlockquote: currentEditor.isActive("blockquote"),
-        isBulletList: currentEditor.isActive("bulletList"),
-        isOrderedList: currentEditor.isActive("orderedList"),
-        isTaskList: currentEditor.isActive("taskList"),
-        isTable: currentEditor.isActive("table"),
-        isBold: currentEditor.isActive("bold"),
-        isItalic: currentEditor.isActive("italic"),
-        isStrike: currentEditor.isActive("strike"),
-        isCode: currentEditor.isActive("code"),
-        isUnderline: currentEditor.isActive("underline"),
-        isHighlight: currentEditor.isActive("highlight"),
-        isLink: currentEditor.isActive("link"),
-        isSuperscript: currentEditor.isActive("superscript"),
-        isSubscript: currentEditor.isActive("subscript")
-      };
+        return {
+          canUndo: currentEditor.can().undo(),
+          canRedo: currentEditor.can().redo(),
+          currentTextAlign: (headingAttributes?.textAlign ?? paragraphAttributes?.textAlign ?? "left") as "left" | "center" | "right",
+          isBlockquote: currentEditor.isActive("blockquote"),
+          isBulletList: currentEditor.isActive("bulletList"),
+          isOrderedList: currentEditor.isActive("orderedList"),
+          isTaskList: currentEditor.isActive("taskList"),
+          isTable: currentEditor.isActive("table"),
+          isBold: currentEditor.isActive("bold"),
+          isItalic: currentEditor.isActive("italic"),
+          isStrike: currentEditor.isActive("strike"),
+          isCode: currentEditor.isActive("code"),
+          isUnderline: currentEditor.isActive("underline"),
+          isHighlight: currentEditor.isActive("highlight"),
+          isLink: currentEditor.isActive("link"),
+          isSuperscript: currentEditor.isActive("superscript"),
+          isSubscript: currentEditor.isActive("subscript")
+        };
+      } catch {
+        return emptyEditorUiState;
+      }
     }
   });
   const currentTextAlign = editorUiState.currentTextAlign;
@@ -1469,7 +1631,7 @@ export default function App() {
   }, [storageReady]);
 
   useEffect(() => {
-    if (!editor || !selectedNote) {
+    if (!editor || editor.isDestroyed || !selectedNote) {
       return;
     }
 
@@ -1478,12 +1640,17 @@ export default function App() {
     }
 
     const nextContent = noteBodyToEditorContent(selectedNote.body);
-    if (editor.getHTML() === nextContent) {
+    if (editor.isDestroyed) {
+      return;
+    }
+
+    const currentContent = editor.getHTML();
+    if (currentContent === nextContent || areNoteBodiesEquivalent(currentContent, nextContent)) {
       return;
     }
 
     try {
-      editor.commands.setContent(nextContent, { emitUpdate: false });
+      editor.chain().setMeta("addToHistory", false).setContent(nextContent, { emitUpdate: false }).run();
     } catch (error) {
       console.error("Could not hydrate editor content", error);
 
@@ -1497,10 +1664,10 @@ export default function App() {
         : "";
 
       try {
-        editor.commands.setContent(fallbackContent, { emitUpdate: false });
+        editor.chain().setMeta("addToHistory", false).setContent(fallbackContent, { emitUpdate: false }).run();
       } catch (fallbackError) {
         console.error("Could not hydrate fallback editor content", fallbackError);
-        editor.commands.clearContent(false);
+        editor.chain().setMeta("addToHistory", false).clearContent(false).run();
       }
     }
   }, [editor, selectedNote?.id, selectedNote?.body]);
@@ -1735,6 +1902,8 @@ export default function App() {
     setWorkspaceView("notes");
     const nextSortOrder = notes.reduce((highest, note) => Math.max(highest, note.sortOrder ?? 0), -1) + 1;
     const note = createNote(nextSortOrder, resolvedLanguage);
+    setNoteContextMenu(null);
+    setFolderContextMenu(null);
     setNotes((current) => [...current, note]);
     setSelectedId(note.id);
     setActiveFolder("all");
@@ -1746,6 +1915,8 @@ export default function App() {
       ...createNote(nextSortOrder, resolvedLanguage),
       folder: folderKey
     };
+    setNoteContextMenu(null);
+    setFolderContextMenu(null);
     setNotes((current) => [...current, note]);
     setExpandedSections((current) => ({
       ...current,
@@ -1753,6 +1924,9 @@ export default function App() {
     }));
     setSelectedId(note.id);
     setActiveFolder(folderKey);
+    setRenamingNoteId(note.id);
+    setRenamingSectionKey(folderKey);
+    setRenamingNoteTitle(note.title);
   }
 
 
@@ -1831,7 +2005,6 @@ export default function App() {
 
     setIsClearDataModalOpen(false);
     setToolbarMenu(null);
-    setLinkInput("");
     setSearchQuery("");
     setIsSearchModalOpen(false);
     setIsCreateFolderModalOpen(false);
@@ -2253,201 +2426,9 @@ export default function App() {
     }
   }
 
-  function setBlockType(blockType: string) {
-    if (!editor) {
-      return;
-    }
-
-    if (blockType === "heading-1") {
-      editor.chain().focus().toggleHeading({ level: 1 }).run();
-      return;
-    }
-
-    if (blockType === "heading-2") {
-      editor.chain().focus().toggleHeading({ level: 2 }).run();
-      return;
-    }
-
-    if (blockType === "heading-3") {
-      editor.chain().focus().toggleHeading({ level: 3 }).run();
-      return;
-    }
-
-    if (blockType === "heading-4") {
-      editor.chain().focus().toggleHeading({ level: 4 }).run();
-      return;
-    }
-
-    editor.chain().focus().setParagraph().run();
-  }
-
-  function setLink() {
-    if (!editor) {
-      return;
-    }
-
-    const url = linkInput.trim();
-
-    if (!url) {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      setToolbarMenu(null);
-      return;
-    }
-
-    const { empty } = editor.state.selection;
-
-    if (empty) {
-      editor.chain().focus().insertContent([{ type: "text", text: url, marks: [{ type: "link", attrs: { href: url } }] }]).run();
-      setToolbarMenu(null);
-      return;
-    }
-
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-    setToolbarMenu(null);
-  }
-
-  function openLinkMenu() {
-    if (!editor) {
-      return;
-    }
-
-    setLinkInput((editor.getAttributes("link").href as string | undefined) ?? "");
-    setToolbarMenu((current) => (current === "link" ? null : "link"));
-  }
-
-  function removeLink() {
-    editor?.chain().focus().extendMarkRange("link").unsetLink().run();
-    setLinkInput("");
-    setToolbarMenu(null);
-  }
-
-  function openCurrentLink() {
-    const href = linkInput.trim() || (editor?.getAttributes("link").href as string | undefined);
-    if (!href) {
-      return;
-    }
-
-    window.open(href, "_blank", "noreferrer");
-  }
-
-  function setTextAlignValue(alignment: "left" | "center" | "right") {
-    if (!editor) {
-      return;
-    }
-
-    editor.chain().focus().setTextAlign(alignment).run();
-    setToolbarMenu(null);
-  }
-  function chooseBlockType(blockType: string) {
-    setBlockType(blockType);
-    setToolbarMenu(null);
-  }
-
-  function chooseListType(listType: "bullet" | "ordered" | "task") {
-    if (!editor) {
-      return;
-    }
-
-    if (listType === "bullet") {
-      editor.chain().focus().toggleBulletList().run();
-    }
-
-    if (listType === "ordered") {
-      editor.chain().focus().toggleOrderedList().run();
-    }
-
-    if (listType === "task") {
-      editor.chain().focus().toggleTaskList().run();
-      window.requestAnimationFrame(() => {
-        editor.chain().focus().run();
-      });
-    }
-
-    setToolbarMenu(null);
-  }
-
   function runTableCommand(command: () => void) {
     command();
     setToolbarMenu(null);
-  }
-
-  function setHighlightColor(color: string | null) {
-    if (!editor) {
-      return;
-    }
-
-    if (!color) {
-      editor.chain().focus().unsetHighlight().run();
-      setToolbarMenu(null);
-      return;
-    }
-
-    editor.chain().focus().toggleHighlight({ color }).run();
-    setToolbarMenu(null);
-  }
-
-  function pickImageFromDevice() {
-    const input = imageInputRef.current;
-    if (!input) {
-      return Promise.resolve<string | null>(null);
-    }
-
-    return new Promise<string | null>((resolve) => {
-      let settled = false;
-
-      const cleanup = () => {
-        input.value = "";
-        input.onchange = null;
-        input.oncancel = null;
-      };
-
-      const settle = (value: string | null) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        cleanup();
-        resolve(value);
-      };
-
-      input.oncancel = () => {
-        settle(null);
-      };
-
-      input.onchange = () => {
-        const file = input.files?.[0];
-        if (!file) {
-          settle(null);
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => settle(typeof reader.result === "string" ? reader.result : null);
-        reader.onerror = () => settle(null);
-        reader.readAsDataURL(file);
-      };
-
-      input.click();
-    });
-  }
-
-  async function addImage() {
-    if (!editor) {
-      return;
-    }
-
-    const selection = {
-      from: editor.state.selection.from,
-      to: editor.state.selection.to
-    };
-
-    const imageSource = await pickImageFromDevice();
-    if (!imageSource) {
-      return;
-    }
-
-    editor.chain().focus().setTextSelection(selection).setImage({ src: imageSource }).run();
   }
 
   function showSidebarTooltipFor(label: string, button: HTMLElement | null) {
@@ -2535,8 +2516,6 @@ export default function App() {
       ) : null}
 
       <main className={workspaceView === "settings" ? "workspace settings-workspace" : "workspace"}>
-        <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
-
         <SimpleBar className="workspace-scroll" autoHide={false} scrollableNodeProps={{ ref: workspaceScrollRef }}>
           {workspaceView === "settings" ? (
             <SettingsPage
@@ -2584,7 +2563,6 @@ export default function App() {
               t={t}
               toolbarVisibility={appPreferences.toolbarVisibility}
               toolbarMenu={toolbarMenu}
-              linkInput={linkInput}
               editor={editor}
               editorUiState={editorUiState}
               titleRef={titleRef}
@@ -2614,17 +2592,7 @@ export default function App() {
                 });
               }}
               onTitleChange={(value) => updateNote({ title: value })}
-              onLinkInputChange={setLinkInput}
-              chooseBlockType={chooseBlockType}
-              setTextAlignValue={setTextAlignValue}
-              chooseListType={chooseListType}
               runTableCommand={runTableCommand}
-              setHighlightColor={setHighlightColor}
-              openLinkMenu={openLinkMenu}
-              setLink={setLink}
-              openCurrentLink={openCurrentLink}
-              removeLink={removeLink}
-              addImage={addImage}
             />
           ) : null}
         </SimpleBar>

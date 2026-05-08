@@ -12,7 +12,7 @@ export type FolderSettings = {
   hiddenFixedFolders: FolderKey[];
 };
 
-export type ToolbarMenu = "heading" | "list" | "table" | "highlight" | "link" | "text-align" | null;
+export type ToolbarMenu = "table" | null;
 
 export type UiState = {
   sidebarCollapsed: boolean;

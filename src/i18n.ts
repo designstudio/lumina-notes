@@ -479,15 +479,15 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
     getStartedTitle: "Boas-vindas",
     getStartedPreview: "Boas-vindas ao Lophos Notes, um editor local-first tranquilo para escrita focada.",
     getStartedBody: `<h1>Boas-vindas ao Lophos Notes</h1>
-<p>O Lophos ÃƒÂ© um app de notas local-first e tranquilo para escrever, organizar e lapidar suas ideias sem quebrar o seu fluxo.</p>
-<p>Use a barra de ferramentas do editor para <strong>negrito</strong>, <em>itÃƒÂ¡lico</em>, <s>tachado</s>, <code>cÃƒÂ³digo inline</code>, links, destaques, tÃƒÂ­tulos, listas, imagens e listas de tarefas.</p>
-<blockquote><p>Uma boa nota deve ser leve para comeÃƒÂ§ar e firme o bastante para crescer.</p></blockquote>
+<p>O Lophos é um app de notas local-first e tranquilo para escrever, organizar e lapidar suas ideias sem quebrar o seu fluxo.</p>
+<p>Use a barra de ferramentas do editor para <strong>negrito</strong>, <em>itálico</em>, <s>tachado</s>, <code>código inline</code>, links, destaques, títulos, listas, imagens e listas de tarefas.</p>
+<blockquote><p>Uma boa nota deve ser leve para começar e firme o bastante para crescer.</p></blockquote>
 <h2>Experimente o editor</h2>
-<p>Selecione qualquer texto e use a barra de ferramentas acima, ou teste atalhos conhecidos como <strong>Ctrl+B</strong> para negrito e <strong>Ctrl+I</strong> para itÃƒÂ¡lico.</p>
+<p>Selecione qualquer texto e use a barra de ferramentas acima, ou teste atalhos conhecidos como <strong>Ctrl+B</strong> para negrito e <strong>Ctrl+I</strong> para itálico.</p>
 <ul>
-  <li><p><strong>TÃƒÂ­tulos</strong> deixam notas longas mais fÃƒÂ¡ceis de escanear.</p></li>
-  <li><p><strong>Destaques</strong> ajudam detalhes importantes a se sobressaÃƒÂ­rem.</p></li>
-  <li><p><strong>Links</strong> mantÃƒÂªm referÃƒÂªncias perto da ideia que elas apoiam.</p></li>
+  <li><p><strong>Títulos</strong> deixam notas longas mais fáceis de escanear.</p></li>
+  <li><p><strong>Destaques</strong> ajudam detalhes importantes a se sobressaírem.</p></li>
+  <li><p><strong>Links</strong> mantêm referências perto da ideia que elas apoiam.</p></li>
 </ul>
 <h3>Uma checklist pequena</h3>
 <ul data-type="taskList">
@@ -496,14 +496,14 @@ export const translations: Record<EffectiveLanguage, TranslationDictionary> = {
   <li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Mova a nota para a pasta certa</p></div></li>
 </ul>
 <h3>Uma tabela simples</h3>
-<table><tbody><tr><th>SeÃƒÂ§ÃƒÂ£o</th><th>Como ajuda</th></tr><tr><td>Ideias</td><td>Guarda fragmentos antes que eles sumam.</td></tr><tr><td>Projetos</td><td>Organiza o prÃƒÂ³ximo passo e links importantes.</td></tr><tr><td>RevisÃƒÂ£o</td><td>Transforma notas brutas em algo mais claro.</td></tr></tbody></table>
+<table><tbody><tr><th>Seção</th><th>Como ajuda</th></tr><tr><td>Ideias</td><td>Guarda fragmentos antes que eles sumam.</td></tr><tr><td>Projetos</td><td>Organiza o próximo passo e links importantes.</td></tr><tr><td>Revisão</td><td>Transforma notas brutas em algo mais claro.</td></tr></tbody></table>
 <h3>Um exemplo de imagem</h3>
-<p>Adicione referÃƒÂªncias, moodboards, capturas e visuais direto dentro da nota.</p>
+<p>Adicione referências, moodboards, capturas e visuais direto dentro da nota.</p>
 <p><img src="${getStartedPlaceholderImage}" alt="Exemplo de imagem no Lophos Notes" /></p>
 <h2>Deixe com a sua cara</h2>
-<p>Escreva atas, pÃƒÂ¡ginas matinais, rascunhos, pesquisas, planos e pequenos fragmentos antes que eles virem ideias maiores.</p>
-<p>VocÃƒÂª tambÃƒÂ©m pode usar formataÃƒÂ§ÃƒÂ£o precisa como x<sup>2</sup> e H<sub>2</sub>O quando uma nota precisar disso.</p>
-<p><mark data-color="#fff2a8" style="background-color: #fff2a8; color: inherit;">Dica:</mark> comece bagunÃƒÂ§ado e organize a nota depois. O editor estÃƒÂ¡ aqui quando vocÃƒÂª precisar de estrutura.</p>`,
+<p>Escreva atas, páginas matinais, rascunhos, pesquisas, planos e pequenos fragmentos antes que eles virem ideias maiores.</p>
+<p>Você também pode usar formatação precisa como x<sup>2</sup> e H<sub>2</sub>O quando uma nota precisar disso.</p>
+<p><mark data-color="#fff2a8" style="background-color: #fff2a8; color: inherit;">Dica:</mark> comece bagunçado e organize a nota depois. O editor está aqui quando você precisar de estrutura.</p>`,
     highlightYellow: "Amarelo",
     highlightGreen: "Verde",
     highlightBlue: "Azul",
