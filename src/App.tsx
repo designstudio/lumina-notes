@@ -266,7 +266,8 @@ function uiStateFromLocalStorage(): UiState {
       sidebarCollapsed: false,
       expandedSections: defaults,
       activeFolder: "get-started",
-      selectedNoteId: ""
+      selectedNoteId: "",
+      workspaceView: "notes"
     };
   }
 
@@ -279,12 +280,16 @@ function uiStateFromLocalStorage(): UiState {
         ...(parsed.expandedSections ?? {})
       },
       activeFolder: typeof parsed.activeFolder === "string" ? parsed.activeFolder as FolderKey : "get-started",
-      selectedNoteId: typeof parsed.selectedNoteId === "string" ? parsed.selectedNoteId : ""
+      selectedNoteId: typeof parsed.selectedNoteId === "string" ? parsed.selectedNoteId : "",
+      workspaceView: parsed.workspaceView === "settings" ? "settings" : "notes"
     };
   } catch {
     return {
       sidebarCollapsed: false,
-      expandedSections: defaults
+      expandedSections: defaults,
+      activeFolder: "get-started",
+      selectedNoteId: "",
+      workspaceView: "notes"
     };
   }
 }
@@ -595,7 +600,7 @@ export default function App() {
   const [storageReady, setStorageReady] = useState(!window.lumina?.notes);
   const [activeFolder, setActiveFolder] = useState<FolderKey>(initialUiState.activeFolder);
   const [selectedId, setSelectedId] = useState(initialUiState.selectedNoteId || notes[0]?.id || "");
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("notes");
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(initialUiState.workspaceView);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialUiState.sidebarCollapsed);
   const [toolbarMenu, setToolbarMenu] = useState<ToolbarMenu>(null);
   const [folderSettings, setFolderSettings] = useState<FolderSettings>(() => folderSettingsFromLocalStorage());
@@ -748,10 +753,11 @@ export default function App() {
           storedNotes?.length ? ensureDefaultNotes(withSortOrder(storedNotes)) : ensureDefaultNotes(withSortOrder(getDemoNotes(initialLanguage))),
           resolveLanguage(appPreferencesFromLocalStorage().language, window.navigator.language)
         );
+        const restoredSelectedNote = nextNotes.find((note) => note.id === initialUiState.selectedNoteId) ?? nextNotes[0] ?? null;
         setNotes(nextNotes);
-        setSelectedId(nextNotes[0]?.id ?? "");
-        setActiveNoteDraft(nextNotes[0] ?? null);
-        draftNoteRef.current = nextNotes[0] ?? null;
+        setSelectedId(restoredSelectedNote?.id ?? "");
+        setActiveNoteDraft(restoredSelectedNote);
+        draftNoteRef.current = restoredSelectedNote;
         dirtyDraftRef.current = false;
         setIsActiveNoteDirty(false);
       } catch (error) {
@@ -985,10 +991,11 @@ export default function App() {
         sidebarCollapsed,
         expandedSections,
         activeFolder,
-        selectedNoteId: selectedId
+        selectedNoteId: selectedId,
+        workspaceView
       })
     );
-  }, [activeFolder, expandedSections, selectedId, sidebarCollapsed]);
+  }, [activeFolder, expandedSections, selectedId, sidebarCollapsed, workspaceView]);
 
   useEffect(() => {
     if (folderSettings.customFolders.length === 0) {
@@ -1651,7 +1658,10 @@ export default function App() {
       appPreferences,
       uiState: {
         sidebarCollapsed,
-        expandedSections
+        expandedSections,
+        activeFolder,
+        selectedNoteId: selectedId,
+        workspaceView
       }
     };
   }
@@ -1700,7 +1710,8 @@ export default function App() {
       sidebarCollapsed: false,
       expandedSections: defaultExpandedSections(),
       activeFolder: "get-started" as FolderKey,
-      selectedNoteId: nextNotes[0]?.id ?? ""
+      selectedNoteId: nextNotes[0]?.id ?? "",
+      workspaceView: "notes" as WorkspaceView
     };
 
     setIsClearDataModalOpen(false);

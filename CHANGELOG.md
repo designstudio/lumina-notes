@@ -2,6 +2,13 @@
 
 ## 2026-05-08
 
+### Estado e restauração
+- Corrigida a restauração da última nota selecionada ao recarregar o app no Electron.
+- Corrigida a persistência da `workspaceView`, permitindo voltar corretamente para `Notes` ou `Settings`.
+- Ajustado o carregamento inicial para reaplicar o `selectedNoteId` salvo em vez de sempre abrir a primeira nota da pasta.
+
+## 2026-05-08
+
 ### Editor, toolbar e escrita
 - Evoluída a integração do TipTap com extração do editor para superfícies/componentes dedicados e helpers reaproveitáveis.
 - Refinada a barra do editor com nova ordenação dos grupos, estados de loading mais estáveis e padronização visual entre botões nativos e botões do kit do TipTap.

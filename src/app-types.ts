@@ -19,6 +19,7 @@ export type UiState = {
   expandedSections: Record<string, boolean>;
   activeFolder: FolderKey;
   selectedNoteId: string;
+  workspaceView: WorkspaceView;
 };
 
 export type WorkspaceView = "notes" | "settings";
