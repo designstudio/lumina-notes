@@ -153,4 +153,4 @@ O histórico recente de evolução do projeto está em [CHANGELOG.md](./CHANGELO
 
 ## Licença
 
-O projeto está marcado como `MIT` no [package.json](./package.json). Se você quiser, no próximo passo eu também posso deixar o repositório com um `LICENSE` formal adicionado.
+Distribuído sob a licença MIT. Veja [LICENSE](./LICENSE).
