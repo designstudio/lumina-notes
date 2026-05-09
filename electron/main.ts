@@ -485,6 +485,7 @@ async function createWindow() {
     minWidth: 1100,
     minHeight: 720,
     icon: process.platform === "win32" ? getWindowIconPath() : undefined,
+    show: false,
     backgroundColor: "#ffffff",
     titleBarStyle: "hidden",
     titleBarOverlay: {
@@ -499,6 +500,29 @@ async function createWindow() {
   });
 
   syncWindowAppearance(window, "light");
+
+  let hasShownWindow = false;
+  const showWindow = () => {
+    if (hasShownWindow || window.isDestroyed()) {
+      return;
+    }
+
+    hasShownWindow = true;
+    window.show();
+  };
+
+  window.once("ready-to-show", showWindow);
+  window.webContents.once("did-finish-load", showWindow);
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    console.error("Renderer failed to load", { errorCode, errorDescription, validatedURL });
+    showWindow();
+  });
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("Renderer process exited unexpectedly", details);
+  });
+  window.webContents.on("unresponsive", () => {
+    console.error("Renderer became unresponsive");
+  });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) {

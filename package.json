@@ -1,6 +1,6 @@
 {
   "name": "lophos-notes",
-  "version": "0.2.1",
+  "version": "0.2.4",
   "private": true,
   "description": "A polished desktop notes app inspired by Apple Notes and Soba.",
   "main": "dist-electron/main.js",
@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "vite build && tsc -p tsconfig.electron.json && electron-builder",
+    "build": "powershell -ExecutionPolicy Bypass -File scripts/generate-appx-assets.ps1 && vite build && tsc -p tsconfig.electron.json && electron-builder",
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "preview": "vite preview"
@@ -40,8 +40,9 @@
       "applicationId": "LophosNotes",
       "backgroundColor": "#ffffff",
       "displayName": "Lophos Notes",
-      "identityName": "LophosNotes",
-      "publisherDisplayName": "Lophos Notes"
+      "identityName": "Lophos.LophosNotes",
+      "publisher": "CN=3D3F74F1-5A3A-4271-AD2B-19E4BC47BC9A",
+      "publisherDisplayName": "Lophos"
     },
     "icon": "assets/windows/icon.ico"
   },

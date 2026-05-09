@@ -4,6 +4,26 @@ Resumo da evolução do app desde a criação do repositório.
 
 Observação: pelo histórico git, o primeiro commit registrado é de **4 de maio de 2026**.
 
+## 2026-05-08
+
+### Microsoft Store e empacotamento
+- Corrigido o empacotamento `appx` para uso na Microsoft Store com manifesto alinhado ao Partner Center.
+- Atualizados `Identity Name`, `Publisher` e `PublisherDisplayName` para os valores exigidos na validação do pacote.
+- Ajustado o fluxo de geração dos assets do AppX para produzir recursos consistentes a partir do branding atual do app.
+- Adicionado script dedicado de build para gerar automaticamente assets do AppX antes do `electron-builder`.
+
+### Ícones, tiles e taskbar
+- Corrigida a reprovação de tiles padrão da Store substituindo assets de exemplo por assets reais do produto.
+- Gerados assets `targetsize-*` com variantes `altform-unplated` e `altform-lightunplated`, corrigindo o backplate indevido do ícone na barra de tarefas.
+- Regenerados os assets de ícone do Windows e o `icon.ico` multirresolução para melhorar o comportamento do shell.
+- Validado localmente o comportamento final de ícone em instalador, Start e taskbar no pacote `0.2.4`.
+
+### Inicialização e estabilidade do pacote
+- Ajustada a janela principal do Electron para abrir com `show: false` e só aparecer quando o renderer estiver pronto.
+- Adicionados handlers de diagnóstico para `did-fail-load`, `render-process-gone` e `unresponsive` no processo principal.
+- Reduzida a percepção de tela branca na abertura do app empacotado.
+- Revalidado o fluxo principal de criação de nota no app instalado via `appx`.
+
 ## 2026-05-06
 
 ### Produto e interface
