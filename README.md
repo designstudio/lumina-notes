@@ -18,7 +18,7 @@
 
 ## Sobre o projeto
 
-O Lophos Notes nasceu como um app de notas inspirado no refinamento visual do Apple Notes e na simplicidade do Soba, mas com uma base desktop moderna em Electron, React, Vite e TypeScript.
+O Lophos Notes nasceu como um app de notas com foco em refinamento visual, escrita fluida e uma base desktop moderna em Electron, React, Vite e TypeScript.
 
 Hoje o projeto já entrega uma experiência local-first bem sólida: editor rico com TipTap, organização por pastas, busca interna, exportação, personalização de aparência e empacotamento `appx` preparado para distribuição na Microsoft Store.
 
@@ -32,6 +32,22 @@ Hoje o projeto já entrega uma experiência local-first bem sólida: editor rico
 - Aparência `light`, `dark` e `system`, com temas visuais e largura da nota configurável.
 - Interface localizada em `pt-BR` e `en-US`.
 - Fluxo de build voltado para Windows com geração de assets e pacote `appx`.
+
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/Print01.png" alt="Tela principal do editor do Lophos Notes" width="48%" />
+  <img src="screenshots/Print02.png" alt="Tela de configurações do Lophos Notes" width="48%" />
+</p>
+<p align="center">
+  <img src="screenshots/Print03.png" alt="Busca rápida de notas no Lophos Notes" width="48%" />
+  <img src="screenshots/Print04.png" alt="Menu de ações da nota no Lophos Notes" width="48%" />
+</p>
+
+- `Print01`: visão principal do editor com sidebar, toolbar rica e onboarding.
+- `Print02`: painel de configurações com idioma, aparência, temas, layout e dados.
+- `Print03`: modal de busca para navegação rápida entre notas.
+- `Print04`: ações da nota, incluindo exportação e organização.
 
 ## Built With
 

@@ -2,7 +2,7 @@
   "name": "lophos-notes",
   "version": "0.2.4",
   "private": true,
-  "description": "A polished desktop notes app inspired by Apple Notes and Soba.",
+  "description": "A polished desktop notes app for calm writing and local-first organization.",
   "main": "dist-electron/main.js",
   "author": "Codex",
   "license": "MIT",
