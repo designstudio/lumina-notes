@@ -1,9 +1,5 @@
 ﻿# Changelog
 
-Resumo da evolução do app desde a criação do repositório.
-
-Observação: pelo histórico git, o primeiro commit registrado é de **4 de maio de 2026**.
-
 ## 2026-05-08
 
 ### Editor, toolbar e escrita
