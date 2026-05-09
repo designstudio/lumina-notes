@@ -6,6 +6,33 @@ Observação: pelo histórico git, o primeiro commit registrado é de **4 de mai
 
 ## 2026-05-08
 
+### Editor, toolbar e escrita
+- Evoluída a integração do TipTap com extração do editor para superfícies/componentes dedicados e helpers reaproveitáveis.
+- Refinada a barra do editor com nova ordenação dos grupos, estados de loading mais estáveis e padronização visual entre botões nativos e botões do kit do TipTap.
+- Ajustados hover, active state, ícones e dropdowns de `heading`, `list`, `table`, `blockquote`, `link`, `highlight`, `undo/redo`, `image upload` e `code block`.
+- Trocado o atalho/botão de `inline code` por `code block`, incluindo estado ativo, labels e ícones coerentes na toolbar e nas settings.
+- Melhorados os menus do editor com traduções completas, width/spacing consistentes, hover temático, animação de saída e correções de alinhamento em ícones e labels.
+- Corrigido o comportamento de ações de tabela, incluindo foco, abertura/fechamento do menu e manipulação sem perder contexto do editor.
+- Adicionados alinhamento e resize de imagem com limites mínimo/máximo, visual temático e integração mais estável do menu de imagem.
+- Ajustado o fluxo do título da nota: novas notas agora focam o título no editor, e `Enter` no título move o foco para o corpo da nota.
+- Ligado `Ctrl+F` / `Cmd+F` à busca interna do app.
+
+### Sidebar, notas e UX
+- Melhorado o fluxo de criação de notas tanto no botão global quanto em `Nova nota` dentro de pasta, abrindo a nota e focando o título para edição imediata.
+- Refinados estados de drag and drop entre pastas, padronizando o drop target com o hover neutro da sidebar.
+- Corrigidos estados visuais de menus, tooltips e interações em sidebar, toolbar e cabeçalho da nota.
+- Ajustado o layout de largura das notas (`Médio` e `Completo`) para aplicar de fato no CSS via `data-note-layout`.
+
+### Tema, tradução e consistência visual
+- Atualizado o tema padrão para `Cloudy Day`.
+- Corrigidos textos com encoding quebrado e labels não traduzidos em partes do editor e menus.
+- Padronizadas cores temáticas em seleção, hover, drag target, upload de imagem, toolbar e componentes derivados do kit do TipTap.
+
+### Desenvolvimento e runtime
+- Melhorado o fluxo de desenvolvimento com ambiente dedicado (`dist-dev` / `.electron-dev`) e isolamento do perfil local do Electron.
+- Ajustado o boot do app para manter melhor separação entre app instalado, modo dev e dados locais migrados.
+- Alinhado o diretório de dados do app para `lophos-notes`, com migração do perfil legado quando necessário.
+
 ### Microsoft Store e empacotamento
 - Corrigido o empacotamento `appx` para uso na Microsoft Store com manifesto alinhado ao Partner Center.
 - Atualizados `Identity Name`, `Publisher` e `PublisherDisplayName` para os valores exigidos na validação do pacote.
@@ -23,6 +50,9 @@ Observação: pelo histórico git, o primeiro commit registrado é de **4 de mai
 - Adicionados handlers de diagnóstico para `did-fail-load`, `render-process-gone` e `unresponsive` no processo principal.
 - Reduzida a percepção de tela branca na abertura do app empacotado.
 - Revalidado o fluxo principal de criação de nota no app instalado via `appx`.
+
+### Commits
+- `423ab1f` - Polish editor UX and release workflow
 
 ## 2026-05-06
 
